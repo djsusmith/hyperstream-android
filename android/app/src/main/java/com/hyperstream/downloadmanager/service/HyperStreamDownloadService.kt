@@ -23,6 +23,8 @@ class HyperStreamDownloadService : Service() {
     private var cpuWakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var lastNotifyTimeMs: Long = 0L
+    private var lastActiveCount: Int = -1
 
     override fun onCreate() {
         super.onCreate()
@@ -49,17 +51,24 @@ class HyperStreamDownloadService : Service() {
             acquireLocks()
             val activeCount = state.downloads.count { it.status == "Downloading" } +
                 state.torrents.count { it.status == "Downloading" }
-            val speedMb = String.format("%.1f MB/s", state.totalDownSpeedBps / 1_000_000.0)
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.notify(
-                NOTIFICATION_ID,
-                buildNotification(
-                    "Downloading ($activeCount active • ${state.activeThreadsTotal} threads)",
-                    "$speedMb • WakeLock & High-Perf Wi-Fi Lock active"
+            val now = System.currentTimeMillis()
+            // Throttle notifications to at most 1 Hz unless active download count changed
+            if (activeCount != lastActiveCount || now - lastNotifyTimeMs >= 1000L) {
+                lastNotifyTimeMs = now
+                lastActiveCount = activeCount
+                val speedMb = String.format("%.1f MB/s", state.totalDownSpeedBps / 1_000_000.0)
+                val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                nm.notify(
+                    NOTIFICATION_ID,
+                    buildNotification(
+                        "Downloading ($activeCount active • ${state.activeThreadsTotal} threads)",
+                        "$speedMb • WakeLock & High-Perf Wi-Fi Lock active"
+                    )
                 )
-            )
+            }
         } else {
             releaseLocks()
+            lastActiveCount = -1
         }
     }
 

@@ -92,6 +92,13 @@ pub enum ControllerCommand {
         file_path: String,
         expected_hash: String,
     },
+    ProbeVideo {
+        url: String,
+    },
+    UpdateExtractors,
+    RetryDownload {
+        id: u64,
+    },
     UpdateSettings {
         max_connections: Option<u32>,
         min_split_kb: Option<u32>,
@@ -151,7 +158,7 @@ impl AndroidCoreController {
         );
 
         let state_file = storage_dir.join("hyperstream_state.json");
-        let loaded: PersistedState = std::fs::read_to_string(&state_file)
+        let mut loaded: PersistedState = std::fs::read_to_string(&state_file)
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_else(|| PersistedState {
@@ -170,6 +177,16 @@ impl AndroidCoreController {
                 rss_feeds: Vec::new(),
                 settings: SettingsDto::default(),
             });
+
+        // Clean up any legacy stuck 0-byte "watch" entries from raw YouTube watch URLs
+        loaded
+            .downloads
+            .retain(|d| !(d.name == "watch" && d.downloaded_bytes == 0));
+        for d in &mut loaded.downloads {
+            if (d.status == "Downloading" || d.status == "Probing") && d.downloaded_bytes == 0 && d.total_bytes == 0 {
+                d.status = "Paused".to_string();
+            }
+        }
 
         let initial_rate = (loaded.settings.speed_limit_kbps > 0)
             .then_some(loaded.settings.speed_limit_kbps * 1024);
@@ -226,7 +243,8 @@ impl AndroidCoreController {
                 let _ = std::fs::create_dir_all(&save_dir);
                 let save_path = save_dir.join(&inferred_name).to_string_lossy().into_owned();
 
-                let should_start = start_immediately.unwrap_or(queue.is_none());
+                let queue_name = queue.unwrap_or_else(|| "Main".to_string());
+                let should_start = start_immediately.unwrap_or(queue_name != "Overnight");
                 let status = if should_start {
                     "Downloading".to_string()
                 } else {
@@ -240,7 +258,7 @@ impl AndroidCoreController {
                     name: inferred_name,
                     url,
                     category: cat,
-                    queue: queue.unwrap_or_else(|| "Main".to_string()),
+                    queue: queue_name,
                     save_path,
                     total_bytes: 0,
                     downloaded_bytes: 0,
@@ -560,6 +578,42 @@ impl AndroidCoreController {
                 })
                 .to_string())
             }
+            ControllerCommand::ProbeVideo { url } => {
+                let rules = crate::extractors::ExtractorRules::load_or_default(&self.storage_dir);
+                let res = self
+                    .runtime
+                    .block_on(crate::extractors::probe_media_url(&url, &rules));
+                match res {
+                    Ok(val) => Ok(val.to_string()),
+                    Err(e) => Err(e),
+                }
+            }
+            ControllerCommand::UpdateExtractors => {
+                let res = self
+                    .runtime
+                    .block_on(crate::extractors::update_extractor_rules(&self.storage_dir));
+                match res {
+                    Ok(rules) => Ok(serde_json::json!({
+                        "ok": true,
+                        "version": rules.version,
+                        "ota_url": rules.ota_url
+                    })
+                    .to_string()),
+                    Err(e) => Err(e),
+                }
+            }
+            ControllerCommand::RetryDownload { id } => {
+                {
+                    let mut st = self.state.lock().unwrap();
+                    if let Some(d) = st.downloads.iter_mut().find(|d| d.id == id) {
+                        d.status = "Downloading".to_string();
+                        d.error_message = None;
+                    }
+                    self.persist_locked(&st);
+                }
+                self.spawn_engine_download(id);
+                Ok(serde_json::json!({ "ok": true, "id": id, "status": "Downloading" }).to_string())
+            }
             ControllerCommand::UpdateSettings {
                 max_connections,
                 min_split_kb,
@@ -681,20 +735,93 @@ impl AndroidCoreController {
         let limiter = self.limiter.clone();
         let hosts = self.hosts.clone();
         let storage_dir = self.storage_dir.clone();
+        let downloads_dir = self.downloads_dir.clone();
 
         self.runtime.spawn(async move {
-            let Ok(parsed_url) = Url::parse(&url_str) else {
+            let mut effective_url = url_str.clone();
+            let mut effective_save_path = save_path.clone();
+            let rules = crate::extractors::ExtractorRules::load_or_default(&storage_dir);
+            let mut custom_ua: Option<String> = None;
+
+            // Resolve YouTube / TikTok / Instagram / Facebook / Social page URLs automatically
+            let needs_resolution = crate::extractors::detect_platform(&effective_url) != "Direct"
+                && !effective_url.contains("googlevideo.com")
+                && !effective_url.contains("tikwm.com");
+
+            if needs_resolution {
+                {
+                    let mut st = state_arc.lock().unwrap();
+                    if let Some(d) = st.downloads.iter_mut().find(|d| d.id == id) {
+                        d.status = "Probing".to_string();
+                        d.error_message = None;
+                    }
+                }
+                match crate::extractors::resolve_best_media_stream(&effective_url, &rules).await {
+                    Ok(resolved) => {
+                        effective_url = resolved.stream_url.clone();
+                        custom_ua = Some(resolved.user_agent);
+                        let save_dir = downloads_dir.join(&resolved.category);
+                        let _ = std::fs::create_dir_all(&save_dir);
+                        effective_save_path = save_dir
+                            .join(&resolved.file_name)
+                            .to_string_lossy()
+                            .into_owned();
+                        let mut st = state_arc.lock().unwrap();
+                        if let Some(d) = st.downloads.iter_mut().find(|d| d.id == id) {
+                            d.name = resolved.file_name;
+                            d.category = resolved.category;
+                            d.save_path = effective_save_path.clone();
+                            d.status = "Downloading".to_string();
+                            if resolved.size_bytes > 0 {
+                                d.total_bytes = resolved.size_bytes;
+                            }
+                        }
+                    }
+                    Err(err_msg) => {
+                        let mut st = state_arc.lock().unwrap();
+                        if let Some(d) = st.downloads.iter_mut().find(|d| d.id == id) {
+                            d.status = "Failed".to_string();
+                            d.error_message = Some(err_msg);
+                            d.speed_bps = 0;
+                            d.active_connections = 0;
+                        }
+                        if let Ok(bytes) = serde_json::to_vec_pretty(&*st) {
+                            let _ = craft_atomic::atomic_write(
+                                &storage_dir.join("hyperstream_state.json"),
+                                &bytes,
+                            );
+                        }
+                        tokens_arc.lock().unwrap().remove(&id);
+                        return;
+                    }
+                }
+            }
+
+            let Ok(parsed_url) = Url::parse(&effective_url) else {
                 return;
             };
             let mut opts = mdm_engine::Options::default();
-            opts.max_connections = clamp_connections_unlocked(max_conns);
+            if let Some(ua) = custom_ua {
+                opts.user_agent = ua;
+            } else if effective_url.contains("googlevideo.com") {
+                if effective_url.contains("c=IOS") {
+                    opts.user_agent = rules.youtube_ios_ua;
+                } else {
+                    opts.user_agent = rules.youtube_android_ua;
+                }
+            }
+            if effective_url.contains("googlevideo.com") {
+                opts.max_connections = clamp_connections_unlocked(max_conns).min(16);
+            } else {
+                opts.max_connections = clamp_connections_unlocked(max_conns);
+            }
             opts.global = Some(limiter);
             opts.host_limits = Some(hosts);
 
             let req = mdm_engine::Request {
                 url: parsed_url,
                 headers: reqwest::header::HeaderMap::new(),
-                dest: mdm_engine::Destination::File(PathBuf::from(&save_path)),
+                dest: mdm_engine::Destination::File(PathBuf::from(&effective_save_path)),
             };
 
             let dl = mdm_engine::Download::start(req, opts);
@@ -874,16 +1001,8 @@ fn build_initial_segments(conns: u32) -> Vec<SegmentDto> {
         .collect()
 }
 
-fn infer_filename(url: &str) -> String {
-    Url::parse(url)
-        .ok()
-        .and_then(|u| {
-            u.path_segments()
-                .and_then(|mut s| s.next_back())
-                .filter(|s| !s.is_empty())
-                .map(|s| s.to_string())
-        })
-        .unwrap_or_else(|| "download.bin".to_string())
+pub fn infer_filename(url: &str) -> String {
+    crate::extractors::infer_smart_filename(url)
 }
 
 fn infer_category(file_name: &str) -> String {

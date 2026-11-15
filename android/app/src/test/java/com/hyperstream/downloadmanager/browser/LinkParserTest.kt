@@ -79,4 +79,29 @@ class LinkParserTest {
         assertFalse(postedOnMain)
         assertEquals(1, list.size)
     }
+
+    @Test
+    fun linkParserExtractsSocialUrlsFromSharedTextAndDetectsPlatform() {
+        val raw = "Check out this TikTok! https://vm.tiktok.com/ZM8abc123/ #fyp"
+        val extracted = LinkParser.extractFirstUrl(raw)
+        assertEquals("https://vm.tiktok.com/ZM8abc123/", extracted)
+        val target = LinkParser.extractDownloadableTarget(raw)
+        assertEquals(LinkKind.VIDEO_STREAM_PAGE, target?.kind)
+        assertEquals("TikTok", LinkParser.detectPlatformName(extracted!!))
+        assertEquals("Facebook", LinkParser.detectPlatformName("https://fb.watch/xyz123/"))
+        assertEquals("Instagram", LinkParser.detectPlatformName("https://www.instagram.com/reel/C9abc/"))
+        assertEquals("YouTube", LinkParser.detectPlatformName("https://youtube.com/watch?v=paZ0RGJ0cj0"))
+    }
+
+    @Test
+    fun parseProbeResultJsonParsesWatermarkFreeAndMp3Streams() {
+        val json = """{"ok":true,"platform":"TikTok","title":"Dance Clip","author":"@creator","watermark_free":true,"extractor_version":"2026.11.15","streams":[{"itag":1,"label":"1080p HD MP4 (No Watermark)","quality":"1080p","format_kind":"video","bitrate_kbps":0,"watermark_free":true,"ext":"mp4","category":"Video","file_name":"Dance_Clip_NoWM.mp4","size_bytes":15000000,"url":"https://cdn.tikwm.com/hd.mp4","user_agent":"Mozilla/5.0"},{"itag":320,"label":"MP3 320 kbps (Studio Audio)","quality":"320kbps","format_kind":"mp3","bitrate_kbps":320,"watermark_free":true,"ext":"mp3","category":"Music","file_name":"Dance_Clip (320kbps).mp3","size_bytes":3200000,"url":"https://cdn.tikwm.com/music.mp3","user_agent":"Mozilla/5.0"}]}"""
+        val res = com.hyperstream.downloadmanager.core.MdmRepository.parseProbeResultJson(json)
+        assertTrue(res.ok)
+        assertEquals("TikTok", res.platform)
+        assertTrue(res.watermarkFree)
+        assertEquals(2, res.streams.size)
+        assertEquals("mp3", res.streams[1].formatKind)
+        assertEquals(320, res.streams[1].bitrateKbps)
+    }
 }

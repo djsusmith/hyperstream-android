@@ -10,15 +10,22 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -41,8 +48,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.hyperstream.downloadmanager.browser.LinkParser
 import com.hyperstream.downloadmanager.core.DownloadItemUi
 import com.hyperstream.downloadmanager.core.MdmUiState
 import com.hyperstream.downloadmanager.ui.components.SegmentMapBar
@@ -54,6 +64,8 @@ fun DownloadsScreen(
     onSelectCategory: (String) -> Unit,
     onAddDownload: (url: String, connections: Int, category: String, checksum: String?) -> Unit,
     onTogglePauseResume: (Long) -> Unit,
+    onRetryDownload: (Long) -> Unit = {},
+    onCancelDownload: (Long, Boolean) -> Unit = { _, _ -> },
     onInspectDownload: (DownloadItemUi) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -186,17 +198,41 @@ fun DownloadsScreen(
         }
 
         // Download List
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            items(filteredDownloads, key = { it.id }) { item ->
-                DownloadItemCard(
-                    item = item,
-                    onTogglePauseResume = { onTogglePauseResume(item.id) },
-                    onInspect = { onInspectDownload(item) }
+        if (filteredDownloads.isEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(40.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "No transfers in this view",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.outline
                 )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "Tap '+ Add URL (128T)' or share a link from YouTube, TikTok, Facebook, or your browser.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(filteredDownloads, key = { it.id }) { item ->
+                    DownloadItemCard(
+                        item = item,
+                        onTogglePauseResume = { onTogglePauseResume(item.id) },
+                        onRetry = { onRetryDownload(item.id) },
+                        onDelete = { onCancelDownload(item.id, true) },
+                        onInspect = { onInspectDownload(item) }
+                    )
+                }
             }
         }
     }
@@ -206,6 +242,8 @@ fun DownloadsScreen(
 private fun DownloadItemCard(
     item: DownloadItemUi,
     onTogglePauseResume: () -> Unit,
+    onRetry: () -> Unit,
+    onDelete: () -> Unit,
     onInspect: () -> Unit
 ) {
     Card(
@@ -221,25 +259,87 @@ private fun DownloadItemCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = item.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val platform = LinkParser.detectPlatformName(item.url)
+                        if (platform != "Direct") {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Text(
+                                    text = platform,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = item.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                     val flag = countryFlagEmoji(item.countryCode)
+                    val etaStr = item.etaSeconds?.let { " • ETA ${formatEta(it)}" } ?: ""
                     Text(
-                        text = "${item.category} • Queue: ${item.queue} • $flag ${item.countryName ?: "Direct"}",
+                        text = "${item.category} • ${item.status}$etaStr • $flag ${item.countryName ?: "Direct"}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                IconButton(onClick = onTogglePauseResume) {
-                    val icon = when (item.status) {
-                        "Downloading" -> Icons.Default.Pause
-                        "Completed" -> Icons.Default.CheckCircle
-                        else -> Icons.Default.PlayArrow
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (item.status == "Failed") {
+                        IconButton(onClick = onRetry) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Retry", tint = MaterialTheme.colorScheme.error)
+                        }
+                    } else if (item.status != "Completed") {
+                        IconButton(onClick = onTogglePauseResume) {
+                            val icon = when (item.status) {
+                                "Downloading", "Probing" -> Icons.Default.Pause
+                                else -> Icons.Default.PlayArrow
+                            }
+                            Icon(icon, contentDescription = item.status, tint = MaterialTheme.colorScheme.primary)
+                        }
+                    } else {
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = "Completed",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(8.dp)
+                        )
                     }
-                    Icon(icon, contentDescription = item.status, tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+
+            // Error display if failed
+            if (item.status == "Failed" && item.errorMessage != null) {
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(Icons.Default.Error, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(14.dp))
+                        Text(
+                            text = item.errorMessage ?: "Failed",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
 
@@ -250,30 +350,30 @@ private fun DownloadItemCard(
                     .height(6.dp)
             )
 
-            SegmentMapBar(
-                segments = item.segments,
-                maxConnections = item.maxConnections,
-                activeConnections = item.activeConnections
-            )
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                val downloadedStr = formatBytes(item.downloadedBytes)
+                val totalStr = if (item.totalBytes > 0) formatBytes(item.totalBytes) else "—"
                 Text(
-                    text = "${formatBytes(item.downloadedBytes)} / ${formatBytes(item.totalBytes)} (${(item.progressFraction * 100).toInt()}%)",
-                    style = MaterialTheme.typography.labelMedium
+                    text = "$downloadedStr / $totalStr (${(item.progressFraction * 100).toInt()}%)",
+                    style = MaterialTheme.typography.bodySmall
                 )
-                val statusRight = if (item.status == "Downloading") {
-                    "${formatSpeed(item.speedBps)} • ETA ${item.etaSeconds ?: 0}s"
-                } else {
-                    item.status + (if (item.checksumVerified == true) " ✓ Verified" else "")
-                }
                 Text(
-                    text = statusRight,
-                    style = MaterialTheme.typography.labelMedium,
+                    text = "${item.activeConnections}/${item.maxConnections}T • ${formatSpeed(item.speedBps)}",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
+                )
+            }
+
+            // Live 128-Connection Segment Map Bar
+            if (item.status == "Downloading" || item.segments.isNotEmpty()) {
+                SegmentMapBar(
+                    segments = item.segments,
+                    maxConnections = item.maxConnections,
+                    activeConnections = item.activeConnections
                 )
             }
         }
@@ -303,4 +403,11 @@ fun formatBytes(bytes: Long): String {
 fun formatSpeed(bps: Long): String {
     if (bps <= 0L) return "0 B/s"
     return "${formatBytes(bps)}/s"
+}
+
+fun formatEta(seconds: Long): String {
+    if (seconds <= 0L) return "0s"
+    val m = seconds / 60
+    val s = seconds % 60
+    return if (m > 0) "${m}m ${s}s" else "${s}s"
 }

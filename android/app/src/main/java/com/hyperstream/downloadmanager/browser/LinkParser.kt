@@ -35,8 +35,36 @@ object LinkParser {
         "tiktok.com",
         "twitter.com",
         "x.com",
-        "instagram.com"
+        "instagram.com",
+        "instagr.am",
+        "facebook.com",
+        "fb.watch",
+        "fb.com",
+        "reddit.com",
+        "threads.net"
     )
+
+    /** First http(s)/ftp URL inside shared text (captions, hashtags and trailing punctuation stripped). */
+    fun extractFirstUrl(rawText: String?): String? {
+        if (rawText.isNullOrBlank()) return null
+        return urlRegex.find(rawText)?.value?.trimEnd('.', ',', ';', ')', '!', '?')
+    }
+
+    /** Human-readable source platform for badges and the format picker. */
+    fun detectPlatformName(url: String): String {
+        val lower = url.lowercase()
+        return when {
+            lower.contains("youtube.com") || lower.contains("youtu.be") -> "YouTube"
+            lower.contains("tiktok.com") -> "TikTok"
+            lower.contains("instagram.com") || lower.contains("instagr.am") -> "Instagram"
+            lower.contains("facebook.com") || lower.contains("fb.watch") || lower.contains("fb.com") -> "Facebook"
+            lower.contains("twitter.com") || lower.contains("x.com/") -> "X"
+            lower.contains("vimeo.com") -> "Vimeo"
+            lower.contains("reddit.com") -> "Reddit"
+            lower.startsWith("magnet:") -> "BitTorrent"
+            else -> "Direct"
+        }
+    }
 
     fun extractDownloadableTarget(rawText: String?): ParsedLinkTarget? {
         if (rawText.isNullOrBlank()) return null

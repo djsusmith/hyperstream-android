@@ -1,88 +1,280 @@
 package com.hyperstream.downloadmanager.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.hyperstream.downloadmanager.core.DownloadItemUi
 import com.hyperstream.downloadmanager.ui.components.SegmentMapBar
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProgressInspectorSheet(
     item: DownloadItemUi,
-    modifier: Modifier = Modifier
+    onDismiss: () -> Unit,
+    onTogglePauseResume: () -> Unit,
+    onRetry: () -> Unit,
+    onDelete: (deleteFile: Boolean) -> Unit
 ) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = null
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = "128-Thread Segment Inspector — ${item.name}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "URL: ${item.url}\nSave Path: ${item.savePath}\nServer Location: ${countryFlagEmoji(item.countryCode)} ${item.countryName ?: "Unknown"} • Resumable: ${if (item.resumable) "Yes (206 Partial Content)" else "No"}",
-                style = MaterialTheme.typography.bodySmall
-            )
+            // Header: Title & Close Button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    val statusColor = when (item.status) {
+                        "Downloading" -> Color(0xFF00E676)
+                        "Completed" -> MaterialTheme.colorScheme.primary
+                        "Probing" -> Color(0xFFFFB300)
+                        "Failed" -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.outline
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(statusColor)
+                    )
+                    Text(
+                        text = "128-Thread Segment Inspector",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "Close Inspector")
+                }
+            }
+
+            // File Name & Details
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = item.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val flag = countryFlagEmoji(item.countryCode)
+                val locStr = item.countryName ?: "Direct CDN"
+                Text(
+                    text = "Status: ${item.status} • $flag $locStr • Queue: ${item.queue} • Max ${item.maxConnections}T",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Error display if failed
+            if (item.status == "Failed" && item.errorMessage != null) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = item.errorMessage ?: "Download failed",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
+
+            // Live Segment Map Bar
             SegmentMapBar(
                 segments = item.segments,
                 maxConnections = item.maxConnections,
                 activeConnections = item.activeConnections
             )
-            item.checksumExpected?.let { hash ->
-                Text(
-                    text = "Integrity Checksum: $hash (${if (item.checksumVerified == true) "Verified OK" else "Pending completion"})",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.secondary
-                )
+
+            // Telemetry: Size & Speed
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val downloadedStr = formatBytes(item.downloadedBytes)
+                    val totalStr = if (item.totalBytes > 0) formatBytes(item.totalBytes) else "Unknown"
+                    Text(
+                        text = "$downloadedStr / $totalStr (${(item.progressFraction * 100).toInt()}%)",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = formatSpeed(item.speedBps),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
+
             HorizontalDivider()
+
+            // Per-Connection Workers (up to 32 shown)
             Text(
-                text = "Active Worker Connections (${item.activeConnections} / ${item.maxConnections})",
+                text = "Worker Connections (${item.activeConnections} Active / ${item.maxConnections} Max)",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold
             )
+
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 220.dp),
+                    .heightIn(max = 160.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(item.segments.take(32), key = { it.index }) { seg ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val rangeText = if (seg.end > 0) {
+                            "Conn #${seg.index + 1} [${formatBytes(seg.pos)} → ${formatBytes(seg.end)}]"
+                        } else {
+                            "Conn #${seg.index + 1} [Awaiting range probe]"
+                        }
                         Text(
-                            text = "Conn #${seg.index + 1} [${formatBytes(seg.start)} → ${formatBytes(seg.end)}]",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        Text(
-                            text = if (seg.active) formatSpeed(seg.speedBps) else "Completed",
+                            text = rangeText,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        val statusText = when {
+                            seg.active -> formatSpeed(seg.speedBps)
+                            seg.end > 0 && seg.pos >= seg.end -> "Finished"
+                            item.status == "Downloading" -> "Connecting..."
+                            else -> item.status
+                        }
+                        Text(
+                            text = statusText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (seg.active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                            fontWeight = if (seg.active) FontWeight.Bold else FontWeight.Normal
                         )
                     }
+                }
+            }
+
+            HorizontalDivider()
+
+            // Action Buttons (Pause/Resume, Retry, Delete)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (item.status == "Failed") {
+                    Button(
+                        onClick = onRetry,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Retry Download")
+                    }
+                } else if (item.status != "Completed") {
+                    Button(
+                        onClick = onTogglePauseResume,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        val icon = if (item.status == "Downloading" || item.status == "Probing") {
+                            Icons.Default.Pause
+                        } else {
+                            Icons.Default.PlayArrow
+                        }
+                        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (item.status == "Downloading") "Pause" else "Resume")
+                    }
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        onDelete(true)
+                        onDismiss()
+                    },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Delete")
                 }
             }
         }

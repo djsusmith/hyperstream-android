@@ -167,3 +167,33 @@ data class LocaleUi(
     val flag: String,
     val rtl: Boolean = false
 )
+
+/** One downloadable variant returned by the native `probe_video` command. */
+@Serializable
+data class ProbedStreamUi(
+    val itag: Int = 0,
+    val label: String = "",
+    val quality: String = "",
+    @SerialName("format_kind") val formatKind: String = "video",
+    @SerialName("bitrate_kbps") val bitrateKbps: Int = 0,
+    @SerialName("watermark_free") val watermarkFree: Boolean = true,
+    val ext: String = "mp4",
+    val category: String = "Video",
+    @SerialName("file_name") val fileName: String = "",
+    @SerialName("size_bytes") val sizeBytes: Long = 0L,
+    val url: String = "",
+    @SerialName("user_agent") val userAgent: String = ""
+)
+
+/** Result of probing a shared/pasted URL (YouTube, TikTok, Instagram, Facebook, X, direct). */
+@Serializable
+data class ProbeResultUi(
+    val ok: Boolean = false,
+    val platform: String = "Direct",
+    val title: String = "",
+    val author: String = "",
+    @SerialName("watermark_free") val watermarkFree: Boolean = false,
+    @SerialName("extractor_version") val extractorVersion: String = "",
+    val streams: List<ProbedStreamUi> = emptyList(),
+    val error: String? = null
+)

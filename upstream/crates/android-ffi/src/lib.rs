@@ -2,6 +2,7 @@
 #![allow(unsafe_code)]
 
 pub mod controller;
+pub mod extractors;
 pub mod i18n_catalog;
 pub mod models;
 
@@ -144,5 +145,86 @@ mod tests {
         assert!(locales.len() >= 86);
         assert!(locales.iter().any(|l| l.code == "ar" && l.rtl));
         assert!(locales.iter().any(|l| l.code == "en" && !l.rtl));
+    }
+
+    #[test]
+    fn extracts_youtube_video_id_and_infers_video_filename() {
+        assert_eq!(
+            extractors::detect_platform("https://youtube.com/watch?v=paZ0RGJ0cj0"),
+            "YouTube"
+        );
+        assert_eq!(
+            extractors::detect_platform("https://vm.tiktok.com/ZM12345/"),
+            "TikTok"
+        );
+        assert_eq!(
+            extractors::detect_platform("https://www.instagram.com/reel/C9abc/"),
+            "Instagram"
+        );
+        assert_eq!(
+            extractors::detect_platform("https://fb.watch/xyz123/"),
+            "Facebook"
+        );
+        assert_eq!(
+            extractors::extract_youtube_video_id(
+                "https://youtube.com/watch?v=paZ0RGJ0cj0&is=dFhWHpvEd4amMzs6"
+            ),
+            Some("paZ0RGJ0cj0".to_string())
+        );
+        assert_eq!(
+            extractors::extract_youtube_video_id("https://youtu.be/aqz-KE-bpKQ?si=123"),
+            Some("aqz-KE-bpKQ".to_string())
+        );
+        assert_eq!(
+            extractors::infer_smart_filename(
+                "https://youtube.com/watch?v=paZ0RGJ0cj0&is=dFhWHpvEd4amMzs6"
+            ),
+            "YouTube_paZ0RGJ0cj0.mp4"
+        );
+    }
+
+    #[test]
+    fn builds_mp3_quality_variants_for_probed_media() {
+        let mp3s = extractors::build_mp3_variants(
+            "Trillion Dollar Scandal",
+            "https://cdn.example.com/audio.m4a",
+            10_000_000,
+            "TestUA",
+        );
+        assert_eq!(mp3s.len(), 3);
+        assert_eq!(mp3s[0]["bitrate_kbps"], 320);
+        assert_eq!(mp3s[0]["ext"], "mp3");
+        assert_eq!(mp3s[0]["category"], "Music");
+        assert!(
+            mp3s[0]["file_name"]
+                .as_str()
+                .unwrap()
+                .ends_with("(320kbps).mp3")
+        );
+        assert_eq!(mp3s[1]["bitrate_kbps"], 192);
+        assert_eq!(mp3s[2]["bitrate_kbps"], 128);
+    }
+
+    #[test]
+    fn main_queue_downloads_start_immediately_while_overnight_queues() {
+        let tmp = tempfile::tempdir().unwrap();
+        let ctrl = controller::AndroidCoreController::new(
+            tmp.path().join("data"),
+            tmp.path().join("downloads"),
+        )
+        .unwrap();
+
+        let _ = ctrl.handle_command_json(
+            r#"{"op":"add_download","url":"https://example.com/test.mp4","connections":32,"category":"Video","queue":"Main"}"#,
+        );
+        let _ = ctrl.handle_command_json(
+            r#"{"op":"add_download","url":"https://example.com/night.iso","connections":32,"category":"Programs","queue":"Overnight"}"#,
+        );
+
+        let snap = ctrl.snapshot();
+        let main_dl = snap.downloads.iter().find(|d| d.name == "test.mp4").unwrap();
+        let night_dl = snap.downloads.iter().find(|d| d.name == "night.iso").unwrap();
+        assert_eq!(main_dl.status, "Downloading");
+        assert_eq!(night_dl.status, "Queued");
     }
 }

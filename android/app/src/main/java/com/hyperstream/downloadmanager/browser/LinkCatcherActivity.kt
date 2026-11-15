@@ -5,7 +5,7 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import com.hyperstream.downloadmanager.core.MdmNative
-import com.hyperstream.downloadmanager.service.HyperStreamDownloadService
+import com.hyperstream.downloadmanager.ui.MainActivity
 
 object LinkCatcherDispatcher {
     fun dispatchSharedText(
@@ -39,38 +39,29 @@ class LinkCatcherActivity : ComponentActivity() {
 
         val candidateText = when (intent?.action) {
             Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)
+                ?: intent.getStringExtra(Intent.EXTRA_SUBJECT)
             Intent.ACTION_VIEW -> intent.dataString
             else -> intent?.dataString ?: intent?.getStringExtra(Intent.EXTRA_TEXT)
         }
 
-        val dataDir = filesDir.resolve("hyperstream_data").absolutePath
-        val downloadsDir = "/storage/emulated/0/Download/HyperStream"
-        val parsed = LinkCatcherDispatcher.dispatchSharedText(
-            rawText = candidateText,
-            dataDir = dataDir,
-            downloadsDir = downloadsDir
-        )
-        if (parsed != null) {
-            when (parsed.kind) {
-                LinkKind.MAGNET, LinkKind.TORRENT_FILE -> {
-                    Toast.makeText(
-                        this,
-                        "HyperStream: Added Torrent (${parsed.suggestedName ?: "Magnet"})",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-                else -> {
-                    Toast.makeText(
-                        this,
-                        "HyperStream: Catching ${parsed.suggestedName ?: parsed.uri} (128 Threads)",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-            }
-            runCatching {
-                startService(Intent(this, HyperStreamDownloadService::class.java))
-            }
+        val target = LinkParser.extractDownloadableTarget(candidateText)
+        if (target == null) {
+            Toast.makeText(this, "HyperStream: no link found in shared text", Toast.LENGTH_SHORT).show()
+            finish()
+            return
         }
+
+        // Open HyperStream itself: torrents are added there, everything else opens the format picker.
+        val open = Intent(this, MainActivity::class.java).apply {
+            putExtra(MainActivity.EXTRA_SHARED_URL, target.uri)
+            putExtra(MainActivity.EXTRA_SHARED_KIND, target.kind.name)
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+            )
+        }
+        startActivity(open)
         finish()
     }
 }

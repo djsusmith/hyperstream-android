@@ -21,7 +21,13 @@ fun MainDownloadsDashboardPreview() {
 fun ProgressInspector128ThreadsPreview() {
     val sample = MdmRepository.sampleInitialState().downloads.first()
     HyperStreamTheme(themeId = "classic", darkModePref = "dark") {
-        ProgressInspectorSheet(item = sample)
+        ProgressInspectorSheet(
+            item = sample,
+            onDismiss = {},
+            onTogglePauseResume = {},
+            onRetry = {},
+            onDelete = {}
+        )
     }
 }
 

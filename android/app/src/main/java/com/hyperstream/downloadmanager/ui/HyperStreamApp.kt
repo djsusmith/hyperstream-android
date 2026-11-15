@@ -1,5 +1,6 @@
 package com.hyperstream.downloadmanager.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -27,12 +28,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import com.hyperstream.downloadmanager.core.DownloadItemUi
 import com.hyperstream.downloadmanager.core.MdmRepository
 import com.hyperstream.downloadmanager.core.MdmUiState
 import com.hyperstream.downloadmanager.core.SettingsUi
 import com.hyperstream.downloadmanager.shizuku.ShizukuManager
 import com.hyperstream.downloadmanager.shizuku.ShizukuResult
+import com.hyperstream.downloadmanager.ui.components.SmartFormatPickerSheet
 import com.hyperstream.downloadmanager.ui.screens.CreditsScreen
 import com.hyperstream.downloadmanager.ui.screens.DownloadsScreen
 import com.hyperstream.downloadmanager.ui.screens.GrabberScreen
@@ -47,15 +48,22 @@ fun HyperStreamApp(
     repository: MdmRepository = remember { MdmRepository.shared }
 ) {
     val state by repository.uiState.collectAsState()
+    val pendingUrl by repository.pendingSharedUrl.collectAsState()
     val shizukuManager = remember(state.settings.shizukuEnabled) {
         ShizukuManager(enabled = state.settings.shizukuEnabled)
     }
+
     HyperStreamAppContent(
         state = state,
-        onAddDownload = { url, conns, cat, checksum ->
-            repository.addDownload(url = url, category = cat, connections = conns, checksumExpected = checksum)
+        repository = repository,
+        pendingSharedUrl = pendingUrl,
+        onClearPendingSharedUrl = { repository.setPendingSharedUrl(null) },
+        onAddDownload = { url, fileName, conns, cat ->
+            repository.addDownload(url = url, fileName = fileName, category = cat, connections = conns)
         },
         onTogglePauseResume = { repository.togglePauseResume(it) },
+        onRetryDownload = { repository.retryDownload(it) },
+        onCancelDownload = { id, del -> repository.cancelDownload(id, del) },
         onToggleQueue = { qName, running -> repository.toggleQueue(qName, running) },
         onAddMagnet = { src, seq -> repository.addTorrent(src, seq) },
         onUpdateSettings = { repository.updateSettings(it) },
@@ -81,9 +89,14 @@ fun HyperStreamApp(
 @Composable
 fun HyperStreamAppContent(
     state: MdmUiState,
+    repository: MdmRepository = remember { MdmRepository.shared },
     initialTab: Int = 0,
-    onAddDownload: (url: String, connections: Int, category: String, checksum: String?) -> Unit = { _, _, _, _ -> },
+    pendingSharedUrl: String? = null,
+    onClearPendingSharedUrl: () -> Unit = {},
+    onAddDownload: (url: String, fileName: String?, connections: Int, category: String) -> Unit = { _, _, _, _ -> },
     onTogglePauseResume: (Long) -> Unit = {},
+    onRetryDownload: (Long) -> Unit = {},
+    onCancelDownload: (Long, Boolean) -> Unit = { _, _ -> },
     onToggleQueue: (String, Boolean) -> Unit = { _, _ -> },
     onAddMagnet: (String, Boolean) -> Unit = { _, _ -> },
     onUpdateSettings: ((SettingsUi) -> SettingsUi) -> Unit = {},
@@ -92,7 +105,11 @@ fun HyperStreamAppContent(
 ) {
     var selectedTab by remember { mutableIntStateOf(initialTab) }
     var selectedCategory by remember { mutableStateOf("All") }
-    var inspectedDownload by remember { mutableStateOf<DownloadItemUi?>(null) }
+    var inspectedDownloadId by remember { mutableStateOf<Long?>(null) }
+    var activePickerUrl by remember { mutableStateOf<String?>(null) }
+
+    // When a link is shared into HyperStream from another app, open the smart format sheet
+    val sheetUrl = pendingSharedUrl ?: activePickerUrl
 
     HyperStreamTheme(
         themeId = state.settings.themeId,
@@ -103,9 +120,9 @@ fun HyperStreamAppContent(
                 TopAppBar(
                     title = {
                         Column {
-                            Text("HyperStream Download Manager", fontWeight = FontWeight.Bold)
+                            Text("HyperStream", fontWeight = FontWeight.Bold)
                             Text(
-                                text = "Created by Ahnaf Hasan Susmith with Antigravity • 128-Thread Engine",
+                                text = "128-Thread Multi-Engine • Ahnaf Hasan Susmith",
                                 style = androidx.compose.material3.MaterialTheme.typography.labelSmall
                             )
                         }
@@ -121,74 +138,74 @@ fun HyperStreamAppContent(
                 )
             },
             bottomBar = {
+                // 5 Bottom Tabs: Labels never wrap on any Android phone screen size
                 NavigationBar {
                     NavigationBarItem(
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
                         icon = { Icon(Icons.Default.CloudDownload, contentDescription = null) },
-                        label = { Text("Downloads") }
+                        label = { Text("Downloads", maxLines = 1) }
                     )
                     NavigationBarItem(
                         selected = selectedTab == 1,
                         onClick = { selectedTab = 1 },
-                        icon = { Icon(Icons.Default.Grain, contentDescription = null) },
-                        label = { Text("Torrents") }
+                        icon = { Icon(Icons.Default.VideoLibrary, contentDescription = null) },
+                        label = { Text("Grabber", maxLines = 1) }
                     )
                     NavigationBarItem(
                         selected = selectedTab == 2,
                         onClick = { selectedTab = 2 },
-                        icon = { Icon(Icons.Default.VideoLibrary, contentDescription = null) },
-                        label = { Text("Grabber") }
+                        icon = { Icon(Icons.Default.Grain, contentDescription = null) },
+                        label = { Text("Torrents", maxLines = 1) }
                     )
                     NavigationBarItem(
                         selected = selectedTab == 3,
                         onClick = { selectedTab = 3 },
                         icon = { Icon(Icons.Default.Schedule, contentDescription = null) },
-                        label = { Text("Queues") }
+                        label = { Text("Queues", maxLines = 1) }
                     )
                     NavigationBarItem(
                         selected = selectedTab == 4,
                         onClick = { selectedTab = 4 },
                         icon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                        label = { Text("Settings") }
-                    )
-                    NavigationBarItem(
-                        selected = selectedTab == 5,
-                        onClick = { selectedTab = 5 },
-                        icon = { Icon(Icons.Default.Info, contentDescription = null) },
-                        label = { Text("Credits") }
+                        label = { Text("Settings", maxLines = 1) }
                     )
                 }
             }
         ) { innerPadding ->
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                inspectedDownload?.let { item ->
-                    ProgressInspectorSheet(item = item)
-                }
                 when (selectedTab) {
                     0 -> DownloadsScreen(
                         state = state,
                         selectedCategory = selectedCategory,
                         onSelectCategory = { selectedCategory = it },
-                        onAddDownload = onAddDownload,
+                        onAddDownload = { url, conns, cat, _ ->
+                            onAddDownload(url, null, conns, cat)
+                        },
                         onTogglePauseResume = onTogglePauseResume,
-                        onInspectDownload = {
-                            inspectedDownload = if (inspectedDownload?.id == it.id) null else it
+                        onRetryDownload = onRetryDownload,
+                        onCancelDownload = onCancelDownload,
+                        onInspectDownload = { item ->
+                            inspectedDownloadId = item.id
                         }
                     )
-                    1 -> TorrentsAndRssScreen(
-                        state = state,
-                        onAddMagnet = onAddMagnet
-                    )
-                    2 -> GrabberScreen(
+                    1 -> GrabberScreen(
+                        repository = repository,
+                        onOpenFormatPicker = { url ->
+                            activePickerUrl = url
+                        },
                         onQueueUrls = { urls ->
-                            urls.forEach { u -> onAddDownload(u, 128, "Video", null) }
+                            urls.forEach { u -> onAddDownload(u, null, 128, "Video") }
                             selectedTab = 0
                         }
+                    )
+                    2 -> TorrentsAndRssScreen(
+                        state = state,
+                        onAddMagnet = onAddMagnet
                     )
                     3 -> QueuesAndSchedulerScreen(
                         state = state,
@@ -202,6 +219,40 @@ fun HyperStreamAppContent(
                         onOpenCredits = { selectedTab = 5 }
                     )
                     5 -> CreditsScreen()
+                }
+
+                // ModalBottomSheet for 128-Thread Segment Inspector (Dismissible, never traps the user across tabs)
+                inspectedDownloadId?.let { id ->
+                    val liveItem = state.downloads.find { it.id == id }
+                    if (liveItem != null) {
+                        ProgressInspectorSheet(
+                            item = liveItem,
+                            onDismiss = { inspectedDownloadId = null },
+                            onTogglePauseResume = { onTogglePauseResume(id) },
+                            onRetry = { onRetryDownload(id) },
+                            onDelete = { del -> onCancelDownload(id, del) }
+                        )
+                    } else {
+                        inspectedDownloadId = null
+                    }
+                }
+
+                // Smart Format & Quality Picker Sheet (YouTube, TikTok No-WM, Instagram, Facebook, MP3 choices)
+                sheetUrl?.let { targetUrl ->
+                    SmartFormatPickerSheet(
+                        url = targetUrl,
+                        repository = repository,
+                        onDismiss = {
+                            activePickerUrl = null
+                            onClearPendingSharedUrl()
+                        },
+                        onDownloadSelected = { streamUrl, fileName, cat, conns ->
+                            onAddDownload(streamUrl, fileName, conns, cat)
+                            selectedTab = 0 // Switch to Downloads tab to see the live download
+                            activePickerUrl = null
+                            onClearPendingSharedUrl()
+                        }
+                    )
                 }
             }
         }

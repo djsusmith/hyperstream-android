@@ -36,6 +36,9 @@
         <activity
             android:name=".browser.LinkCatcherActivity"
             android:exported="true"
+            android:label="Download with HyperStream"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <!-- Share Sheet (ACTION_SEND) -->
             <intent-filter>

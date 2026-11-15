@@ -1,0 +1,14 @@
+{
+  "version": "2026.11.15-r2",
+  "ota_url": "https://raw.githubusercontent.com/djsusmith/hyperstream-android/main/extractor_rules.json",
+  "youtube_android_version": "20.03.38",
+  "youtube_android_sdk": 35,
+  "youtube_android_ua": "com.google.android.youtube/20.03.38 (Linux; U; Android 15) gzip",
+  "youtube_ios_version": "20.03.02",
+  "youtube_ios_ua": "com.google.ios.youtube/20.03.02 (iPhone16,2; U; CPU iOS 18_2_1 like Mac OS X;)",
+  "tiktok_api_url": "https://www.tikwm.com/api/",
+  "cobalt_instances": [
+    "https://api.cobalt.tools/",
+    "https://cobalt-api.kwiatekmiki.com/"
+  ]
+}

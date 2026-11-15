@@ -10,12 +10,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 class MdmRepository(
     private val dataDir: String = "/storage/emulated/0/Download/HyperStream/.data",
     private val downloadsDir: String = "/storage/emulated/0/Download/HyperStream",
-    private val autoPoll: Boolean = true
+    private val autoPoll: Boolean = true,
+    initialState: MdmUiState = MdmUiState()
 ) {
     private val json = Json {
         ignoreUnknownKeys = true
@@ -23,8 +27,16 @@ class MdmRepository(
     }
 
     private val pollScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val _uiState = MutableStateFlow(sampleInitialState())
+    private val _uiState = MutableStateFlow(initialState)
     val uiState: StateFlow<MdmUiState> = _uiState.asStateFlow()
+
+    /** URL shared into HyperStream from another app, waiting for the format picker to open. */
+    private val _pendingSharedUrl = MutableStateFlow<String?>(null)
+    val pendingSharedUrl: StateFlow<String?> = _pendingSharedUrl.asStateFlow()
+
+    fun setPendingSharedUrl(url: String?) {
+        _pendingSharedUrl.value = url
+    }
 
     init {
         if (MdmNative.safeInit(dataDir, downloadsDir)) {
@@ -33,7 +45,7 @@ class MdmRepository(
                 pollScope.launch {
                     while (isActive) {
                         refreshFromNative()
-                        delay(150L)
+                        delay(250L)
                     }
                 }
             }
@@ -63,41 +75,39 @@ class MdmRepository(
         checksumExpected: String? = null
     ) {
         val clamped = connections.coerceIn(1, 128)
-        val cmd = """{"op":"add_download","url":${json.encodeToString(kotlinx.serialization.serializer(), url)},"connections":$clamped,"category":${json.encodeToString(kotlinx.serialization.serializer(), category)},"queue":${json.encodeToString(kotlinx.serialization.serializer(), queue)}}"""
+        val nameField = fileName?.takeIf { it.isNotBlank() }
+            ?.let { ""","file_name":${quote(it)}""" } ?: ""
+        val cmd = """{"op":"add_download","url":${quote(url)},"connections":$clamped,"category":${quote(category)},"queue":${quote(queue)},"start_immediately":${queue != "Overnight"}$nameField}"""
         MdmNative.safeExecuteCommand(cmd)
-        val inferredName = fileName?.takeIf { it.isNotBlank() }
-            ?: url.substringAfterLast('/').substringBefore('?').ifBlank { "download.bin" }
-        val newId = (_uiState.value.downloads.maxOfOrNull { it.id } ?: 0L) + 1L
-        val segments = (0 until clamped).map { idx ->
-            SegmentUi(index = idx, start = idx * 1024L, pos = idx * 1024L, end = (idx + 1) * 1024L, active = true)
-        }
-        val item = DownloadItemUi(
-            id = newId,
-            name = inferredName,
-            url = url,
-            category = category,
-            queue = queue,
-            savePath = "$downloadsDir/$category/$inferredName",
-            totalBytes = 0L,
-            downloadedBytes = 0L,
-            speedBps = 0L,
-            status = "Downloading",
-            resumable = true,
-            activeConnections = clamped,
-            maxConnections = clamped,
-            checksumExpected = checksumExpected,
-            segments = segments
-        )
-        _uiState.update { state ->
-            val updated = listOf(item) + state.downloads
-            state.copy(
-                downloads = updated,
-                wakeLockActive = true,
-                activeThreadsTotal = updated.filter { it.status == "Downloading" }.sumOf { it.activeConnections }
-            )
-        }
         refreshFromNative()
     }
+
+    /** Probes a page/media URL for downloadable variants (video resolutions, no-watermark, MP3 bitrates). */
+    suspend fun probeVideo(url: String): ProbeResultUi = withContext(Dispatchers.IO) {
+        val raw = MdmNative.safeExecuteCommand("""{"op":"probe_video","url":${quote(url)}}""")
+        parseProbeResultJson(raw)
+    }
+
+    /** Pulls the latest extractor rules (client versions, endpoints) so blocked extractors recover without an APK update. */
+    suspend fun updateExtractors(): String = withContext(Dispatchers.IO) {
+        val raw = MdmNative.safeExecuteCommand("""{"op":"update_extractors"}""")
+        runCatching {
+            json.parseToJsonElement(raw).jsonObject["version"]?.jsonPrimitive?.content
+        }.getOrNull() ?: "built-in"
+    }
+
+    fun retryDownload(id: Long) {
+        MdmNative.safeExecuteCommand("""{"op":"retry_download","id":$id}""")
+        refreshFromNative()
+    }
+
+    fun cancelDownload(id: Long, deleteFile: Boolean = false) {
+        MdmNative.safeExecuteCommand("""{"op":"cancel_download","id":$id,"delete_file":$deleteFile}""")
+        _uiState.update { s -> s.copy(downloads = s.downloads.filterNot { it.id == id }) }
+        refreshFromNative()
+    }
+
+    private fun quote(s: String): String = json.encodeToString(kotlinx.serialization.serializer(), s)
 
     fun togglePauseResume(id: Long) {
         _uiState.update { state ->
@@ -162,8 +172,41 @@ class MdmRepository(
     }
 
     companion object {
-        val shared: MdmRepository by lazy { MdmRepository() }
+        /** Public folder where finished files land (Video/, Music/, Programs/ …). */
+        const val DEFAULT_DOWNLOADS_DIR = "/storage/emulated/0/Download/HyperStream"
 
+        @Volatile private var instance: MdmRepository? = null
+
+        /** The one repository shared by MainActivity, LinkCatcherActivity and HyperStreamDownloadService. */
+        fun getOrCreate(dataDir: String, downloadsDir: String = DEFAULT_DOWNLOADS_DIR): MdmRepository =
+            instance ?: synchronized(this) {
+                instance ?: MdmRepository(dataDir = dataDir, downloadsDir = downloadsDir).also { instance = it }
+            }
+
+        /** Same instance, keyed on the app's private data folder (`files/hyperstream_data`). */
+        fun forContext(context: android.content.Context): MdmRepository =
+            getOrCreate(context.filesDir.resolve("hyperstream_data").absolutePath)
+
+        /** The shared repository if the app already created it; otherwise a default-path instance. */
+        val shared: MdmRepository
+            get() = instance ?: synchronized(this) {
+                instance ?: MdmRepository().also { instance = it }
+            }
+
+        private val probeJson = Json { ignoreUnknownKeys = true }
+
+        fun parseProbeResultJson(raw: String?): ProbeResultUi {
+            if (raw.isNullOrBlank()) return ProbeResultUi(ok = false, error = "Empty response from engine")
+            return runCatching {
+                val parsed = probeJson.decodeFromString<ProbeResultUi>(raw)
+                if (!parsed.ok && parsed.error == null) {
+                    val err = probeJson.parseToJsonElement(raw).jsonObject["error"]?.jsonPrimitive?.content
+                    parsed.copy(error = err ?: "Could not read this link")
+                } else parsed
+            }.getOrElse { ProbeResultUi(ok = false, error = "Could not read this link") }
+        }
+
+        /** Demo data for @Preview functions only — never used as runtime state. */
         fun sampleInitialState(): MdmUiState {
             val segments128 = (0 until 128).map { idx ->
                 val chunk = 32L * 1024L * 1024L
