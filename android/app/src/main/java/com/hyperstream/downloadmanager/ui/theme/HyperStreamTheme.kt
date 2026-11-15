@@ -95,9 +95,12 @@ fun HyperStreamTheme(
     val useDark = when (darkModePref.lowercase()) {
         "light" -> false
         "dark" -> true
-        else -> isSystemInDarkTheme()
+        else -> when (style) {
+            MdmThemeStyle.OBSIDIAN_FLAGSHIP, MdmThemeStyle.METRO_DARK -> true
+            else -> isSystemInDarkTheme()
+        }
     }
-    val colors = if (!useDark) {
+    val colors = if (!useDark && style != MdmThemeStyle.OBSIDIAN_FLAGSHIP) {
         ClassicLightScheme
     } else {
         when (style) {

@@ -56,7 +56,19 @@ class MdmRepository(
         if (raw.isBlank() || raw == "{}") return false
         return runCatching {
             val parsed = json.decodeFromString<MdmUiState>(raw)
-            _uiState.value = parsed
+            val currentSettings = _uiState.value.settings
+            val effectiveSettings = if (currentSettings.themeId.isNotBlank() && currentSettings.themeId != "classic") {
+                parsed.settings.copy(
+                    themeId = currentSettings.themeId,
+                    darkMode = currentSettings.darkMode
+                )
+            } else {
+                parsed.settings.copy(
+                    themeId = "obsidian",
+                    darkMode = "dark"
+                )
+            }
+            _uiState.value = parsed.copy(settings = effectiveSettings)
             true
         }.getOrDefault(false)
     }
