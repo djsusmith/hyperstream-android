@@ -31,10 +31,14 @@ class ShizukuManager(
         }
     }
 
+    private fun escapeShellArg(arg: String): String {
+        return "'" + arg.replace("'", "'\\''") + "'"
+    }
+
     fun silentInstallApk(apkPath: String): ShizukuResult {
         if (!enabled) return ShizukuResult.Unavailable("Shizuku mode is disabled in HyperStream settings")
-        val safePath = apkPath.replace("\"", "\\\"")
-        val (code, out) = commandRunner("pm install -r \"$safePath\"")
+        val safePath = escapeShellArg(apkPath)
+        val (code, out) = commandRunner("pm install -r $safePath")
         return if (code == 0 && out.contains("Success", ignoreCase = true)) {
             ShizukuResult.Success(out.trim())
         } else if (code < 0) {
@@ -46,9 +50,9 @@ class ShizukuManager(
 
     fun moveToRestrictedDir(src: String, dest: String): ShizukuResult {
         if (!enabled) return ShizukuResult.Unavailable("Shizuku mode is disabled in HyperStream settings")
-        val safeSrc = src.replace("\"", "\\\"")
-        val safeDest = dest.replace("\"", "\\\"")
-        val (code, out) = commandRunner("cp -f \"$safeSrc\" \"$safeDest\"")
+        val safeSrc = escapeShellArg(src)
+        val safeDest = escapeShellArg(dest)
+        val (code, out) = commandRunner("cp -f $safeSrc $safeDest")
         return if (code == 0) {
             ShizukuResult.Success(out.trim())
         } else if (code < 0) {
@@ -63,9 +67,8 @@ class ShizukuManager(
         val cmd = buildString {
             append(bin)
             args.forEach { arg ->
-                append(" \"")
-                append(arg.replace("\"", "\\\""))
-                append("\"")
+                append(" ")
+                append(escapeShellArg(arg))
             }
         }
         val (code, out) = commandRunner(cmd)
