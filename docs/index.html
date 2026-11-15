@@ -307,6 +307,55 @@
       opacity: 0.85;
     }
 
+    /* High-Speed CDN Mirror Selector */
+    .mirror-selector-box {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 14px;
+      margin-bottom: 22px;
+      flex-wrap: wrap;
+    }
+
+    .mirror-label {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .mirror-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      font-family: inherit;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .mirror-btn:hover {
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.08);
+      transform: translateY(-1px);
+    }
+
+    .mirror-btn.active {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: #10b981;
+      color: #34d399;
+      box-shadow: 0 0 16px rgba(16, 185, 129, 0.25);
+    }
+
     /* Security & Play Protect Reassurance Banner */
     .reassurance-card {
       max-width: 780px;
@@ -730,7 +779,7 @@
         <a href="#engine">128T Engine</a>
         <a href="#comparison">Comparison</a>
         <a href="https://github.com/djsusmith/hyperstream-android" target="_blank" rel="noopener">GitHub</a>
-        <a href="https://github.com/djsusmith/hyperstream-android/releases/download/v0.6.0/HyperStream-v0.6.0-arm64.apk" class="btn btn-primary btn-nav" onclick="trackDownload('navbar')">
+        <a href="https://gh-proxy.com/https://github.com/djsusmith/hyperstream-android/releases/download/v0.6.0/HyperStream-v0.6.0-arm64.apk" class="btn btn-primary btn-nav" id="navDownloadBtn" onclick="trackDownload('navbar')">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Download APK
         </a>
@@ -761,18 +810,26 @@
       </p>
 
       <div class="hero-actions">
-        <a href="https://github.com/djsusmith/hyperstream-android/releases/download/v0.6.0/HyperStream-v0.6.0-arm64.apk" class="btn btn-primary btn-download-hero" id="heroDownloadBtn" onclick="trackDownload('hero')">
+        <a href="https://gh-proxy.com/https://github.com/djsusmith/hyperstream-android/releases/download/v0.6.0/HyperStream-v0.6.0-arm64.apk" class="btn btn-primary btn-download-hero" id="heroDownloadBtn" onclick="trackDownload('hero')">
           <span style="display: flex; align-items: center; gap: 8px;">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Download HyperStream v0.6.0
           </span>
-          <span class="subtext">ARM64 APK &bull; 55 MB &bull; GPL-3.0 Open Source</span>
+          <span class="subtext">ARM64 APK &bull; Android 8.0+ &bull; GPL-3.0 Open Source</span>
         </a>
 
         <a href="https://github.com/djsusmith/hyperstream-android" target="_blank" rel="noopener" class="btn btn-secondary" style="padding: 16px 28px;">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
           View on GitHub
         </a>
+      </div>
+
+      <!-- High-Speed CDN Mirror Selector -->
+      <div class="mirror-selector-box">
+        <span class="mirror-label">⚡ Nearest CDN Mirror:</span>
+        <button class="mirror-btn active" onclick="setMirror('cdn', this)">Cloudflare Edge (Fastest)</button>
+        <button class="mirror-btn" onclick="setMirror('gh', this)">GitHub Direct</button>
+        <button class="mirror-btn" onclick="setMirror('alt', this)">Fast Mirror (ghfast)</button>
       </div>
 
       <!-- Play Protect & Trust Reassurance (Translucent Card) -->
@@ -967,6 +1024,29 @@
         </table>
       </div>
     </section>
+
+    <!-- Bottom CTA Banner (Kiwi Next style) -->
+    <section style="margin: 64px 0 24px; text-align: center; padding: 48px 24px; background: radial-gradient(circle at top, rgba(99, 102, 241, 0.15), rgba(15, 23, 42, 0.7) 70%); border: 1px solid var(--card-border); border-radius: 24px; position: relative; overflow: hidden;">
+      <h2 style="font-size: clamp(1.6rem, 3vw, 2.2rem); font-weight: 800; margin-bottom: 12px; letter-spacing: -0.5px;">Ready to Turbocharge Your Downloads?</h2>
+      <p style="color: var(--text-muted); max-width: 560px; margin: 0 auto 28px; font-size: 1.05rem; line-height: 1.6;">
+        Experience maximum speed on Android with 128 parallel segmented threads, 4K YouTube &amp; TikTok extraction, and native BitTorrent.
+      </p>
+      <div style="display: flex; justify-content: center; gap: 16px; flex-wrap: wrap;">
+        <a id="bottomDownloadBtn" href="https://gh-proxy.com/https://github.com/djsusmith/hyperstream-android/releases/download/v0.6.0/HyperStream-v0.6.0-arm64.apk" class="btn btn-primary btn-download-hero" onclick="trackDownload('bottom_cta')">
+          <span style="display: flex; align-items: center; gap: 8px;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download HyperStream v0.6.0
+          </span>
+          <span class="subtext">ARM64 APK &bull; Android 8.0+ &bull; GPL-3.0 Open Source</span>
+        </a>
+      </div>
+      <div class="mirror-selector-box" style="margin-top: 22px; margin-bottom: 0;">
+        <span class="mirror-label">⚡ Nearest CDN Mirror:</span>
+        <button class="mirror-btn active" onclick="setMirror('cdn', this)">Cloudflare Edge (Fastest)</button>
+        <button class="mirror-btn" onclick="setMirror('gh', this)">GitHub Direct</button>
+        <button class="mirror-btn" onclick="setMirror('alt', this)">Fast Mirror (ghfast)</button>
+      </div>
+    </section>
   </main>
 
   <!-- Footer (Kiwi Next style) -->
@@ -993,6 +1073,40 @@
   </footer>
 
   <script>
+    const mirrorMap = {
+      cdn: 'https://gh-proxy.com/https://github.com/djsusmith/hyperstream-android/releases/download/v0.6.0/HyperStream-v0.6.0-arm64.apk',
+      gh: 'https://github.com/djsusmith/hyperstream-android/releases/download/v0.6.0/HyperStream-v0.6.0-arm64.apk',
+      alt: 'https://ghfast.top/https://github.com/djsusmith/hyperstream-android/releases/download/v0.6.0/HyperStream-v0.6.0-arm64.apk'
+    };
+
+    let activeMirrorKey = 'cdn';
+
+    function setMirror(key, clickedBtn) {
+      activeMirrorKey = key;
+      const url = mirrorMap[key] || mirrorMap.cdn;
+      
+      const heroBtn = document.getElementById('heroDownloadBtn');
+      const navBtn = document.getElementById('navDownloadBtn');
+      const bottomBtn = document.getElementById('bottomDownloadBtn');
+      if (heroBtn) heroBtn.href = url;
+      if (navBtn) navBtn.href = url;
+      if (bottomBtn) bottomBtn.href = url;
+
+      document.querySelectorAll('.mirror-selector-box').forEach(box => {
+        box.querySelectorAll('.mirror-btn').forEach(btn => {
+          if (btn.getAttribute('onclick')?.includes("'" + key + "'")) {
+            btn.classList.add('active');
+          } else {
+            btn.classList.remove('active');
+          }
+        });
+      });
+
+      if (typeof fbq === 'function') {
+        fbq('trackCustom', 'SelectMirror', { mirror: key, url: url });
+      }
+    }
+
     function trackDownload(source) {
       if (typeof fbq === 'function') {
         fbq('track', 'Lead', {

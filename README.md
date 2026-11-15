@@ -145,8 +145,8 @@ flowchart TD
         K --> Q["mdm-cnl (Click'n'Load 2 Server :9666)"]
     end
 
-    UI <===>|MdmNative (JSON IPC)| NativeBridge
-    Service <===>|State Sync (250ms)| NativeBridge
+    A <-->|MdmNative JSON IPC| J
+    G <-->|State Sync 250ms| J
 ```
 
 ---
