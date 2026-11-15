@@ -16,9 +16,9 @@ enum class UpdateChannel(val id: String, val displayName: String) {
 
 data class GithubReleaseDto(
     val tagName: String,
-    val name: String,
+    val name: String = "",
     val prerelease: Boolean,
-    val upstreamCommit: String,
+    val upstreamCommit: String = "",
     val apkDownloadUrl: String,
     val releaseNotes: String = "",
     val sizeBytes: Long = 0L,
@@ -197,6 +197,27 @@ object UpdateChannelManager {
         }
     }
 
+
+    fun isUpdateAvailable(
+        currentVersion: String,
+        currentUpstreamSha: String,
+        release: GithubReleaseDto,
+        channel: UpdateChannel
+    ): Boolean {
+        return when (channel) {
+            UpdateChannel.STABLE -> {
+                if (release.prerelease) return false
+                val cleanCurrent = currentVersion.removePrefix("v").trim()
+                val cleanRemote = release.tagName.removePrefix("v").trim()
+                compareSemver(cleanRemote, cleanCurrent) > 0
+            }
+            UpdateChannel.NIGHTLY_BUGFIX -> {
+                val cleanCurrentSha = currentUpstreamSha.trim().lowercase()
+                val cleanRemoteSha = release.upstreamCommit.trim().lowercase()
+                cleanRemoteSha.isNotEmpty() && cleanRemoteSha != cleanCurrentSha
+            }
+        }
+    }
 
     fun compareSemver(a: String, b: String): Int {
         val partsA = a.split('.', '-').mapNotNull { it.toIntOrNull() }

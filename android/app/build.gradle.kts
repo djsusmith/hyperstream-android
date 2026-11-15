@@ -27,23 +27,28 @@ android {
         }
     }
 
+    val keystoreFile = file("hyperstream-release.keystore")
+    val hasReleaseKeystore = keystoreFile.exists()
+
     signingConfigs {
-        create("release") {
-            storeFile = file("hyperstream-release.keystore")
-            storePassword = "hyperstream2026"
-            keyAlias = "hyperstream"
-            keyPassword = "hyperstream2026"
-            enableV1Signing = true
-            enableV2Signing = true
-            enableV3Signing = true
-            enableV4Signing = true
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = keystoreFile
+                storePassword = "hyperstream2026"
+                keyAlias = "hyperstream"
+                keyPassword = "hyperstream2026"
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
         }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (hasReleaseKeystore) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
         debug {
             isMinifyEnabled = false
