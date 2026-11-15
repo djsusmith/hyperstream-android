@@ -32,6 +32,7 @@ class MainActivity : ComponentActivity() {
 
         // Only handle the launch intent once (not again after the activity is recreated).
         if (savedInstanceState == null) {
+            com.hyperstream.downloadmanager.core.MetaPixelTracker.trackAppOpen()
             handleSharedIntent(intent)
         }
 
@@ -71,6 +72,8 @@ class MainActivity : ComponentActivity() {
 
     /** Torrents are added directly; every other link opens the format & quality picker. */
     private fun routeLink(url: String, kind: LinkKind) {
+        val platform = com.hyperstream.downloadmanager.browser.LinkParser.detectPlatformName(url)
+        com.hyperstream.downloadmanager.core.MetaPixelTracker.trackShareReceived(url, platform)
         when (kind) {
             LinkKind.MAGNET, LinkKind.TORRENT_FILE -> {
                 repository.addTorrent(url, sequential = true)

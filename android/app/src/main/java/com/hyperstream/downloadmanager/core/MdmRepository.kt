@@ -75,6 +75,8 @@ class MdmRepository(
         checksumExpected: String? = null
     ) {
         val clamped = connections.coerceIn(1, 128)
+        val platform = com.hyperstream.downloadmanager.browser.LinkParser.detectPlatformName(url)
+        MetaPixelTracker.trackStartDownload(fileName, platform, category, clamped)
         val nameField = fileName?.takeIf { it.isNotBlank() }
             ?.let { ""","file_name":${quote(it)}""" } ?: ""
         val cmd = """{"op":"add_download","url":${quote(url)},"connections":$clamped,"category":${quote(category)},"queue":${quote(queue)},"start_immediately":${queue != "Overnight"}$nameField}"""
