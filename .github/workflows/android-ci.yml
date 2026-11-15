@@ -7,7 +7,7 @@ on:
     branches: ["main"]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-and-test:
@@ -49,3 +49,13 @@ jobs:
         with:
           name: HyperStream-arm64-apk
           path: android/app/build/outputs/apk/release/*.apk
+
+      - name: Publish & Update GitHub Release Assets (v0.6.0 & Nightly)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          APK_FILE=$(ls android/app/build/outputs/apk/release/*.apk | head -n 1)
+          cp "$APK_FILE" HyperStream-v0.6.0-arm64.apk
+          gh release upload v0.6.0 HyperStream-v0.6.0-arm64.apk --clobber || true
+          gh release upload nightly HyperStream-v0.6.0-arm64.apk --clobber || true
