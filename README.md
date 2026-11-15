@@ -1,5 +1,8 @@
 # HyperStream Download Manager for Android
 
+> **Created by Ahnaf Hasan Susmith with Antigravity**  
+> **Contact:** [`susdj.96@gmail.com`](mailto:susdj.96@gmail.com)
+
 **HyperStream** (`com.hyperstream.downloadmanager`) is the native Android port of [Mister Download Manager (`anefzaoui/misterdownloadmanager`)](https://github.com/anefzaoui/misterdownloadmanager), combining the upstream Rust multi-connection download & torrent core (`libmdm_android.so`) with a native Jetpack Compose Material 3 UI.
 
 ---

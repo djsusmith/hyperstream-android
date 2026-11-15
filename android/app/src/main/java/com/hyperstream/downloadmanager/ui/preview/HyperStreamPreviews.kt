@@ -60,3 +60,12 @@ fun SettingsShizukuUpdaterPreview() {
         initialTab = 4
     )
 }
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "7. Credits — Ahnaf Hasan Susmith")
+@Composable
+fun CreditsPagePreview() {
+    HyperStreamAppContent(
+        state = MdmRepository.sampleInitialState(),
+        initialTab = 5
+    )
+}

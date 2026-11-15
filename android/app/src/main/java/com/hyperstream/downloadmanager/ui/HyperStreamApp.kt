@@ -6,11 +6,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Grain
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -31,6 +33,7 @@ import com.hyperstream.downloadmanager.core.MdmUiState
 import com.hyperstream.downloadmanager.core.SettingsUi
 import com.hyperstream.downloadmanager.shizuku.ShizukuManager
 import com.hyperstream.downloadmanager.shizuku.ShizukuResult
+import com.hyperstream.downloadmanager.ui.screens.CreditsScreen
 import com.hyperstream.downloadmanager.ui.screens.DownloadsScreen
 import com.hyperstream.downloadmanager.ui.screens.GrabberScreen
 import com.hyperstream.downloadmanager.ui.screens.ProgressInspectorSheet
@@ -102,8 +105,16 @@ fun HyperStreamAppContent(
                         Column {
                             Text("HyperStream Download Manager", fontWeight = FontWeight.Bold)
                             Text(
-                                text = "MDM v${state.settings.upstreamVersion} Core • 128-Thread Engine • Shizuku Ready",
+                                text = "Created by Ahnaf Hasan Susmith with Antigravity • 128-Thread Engine",
                                 style = androidx.compose.material3.MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { selectedTab = 5 }) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Credits & About"
                             )
                         }
                     }
@@ -140,6 +151,12 @@ fun HyperStreamAppContent(
                         onClick = { selectedTab = 4 },
                         icon = { Icon(Icons.Default.Settings, contentDescription = null) },
                         label = { Text("Settings") }
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == 5,
+                        onClick = { selectedTab = 5 },
+                        icon = { Icon(Icons.Default.Info, contentDescription = null) },
+                        label = { Text("Credits") }
                     )
                 }
             }
@@ -181,8 +198,10 @@ fun HyperStreamAppContent(
                         state = state,
                         onUpdateSettings = onUpdateSettings,
                         onWhitelistDoze = onWhitelistDoze,
-                        onSilentSelfUpdate = onSilentSelfUpdate
+                        onSilentSelfUpdate = onSilentSelfUpdate,
+                        onOpenCredits = { selectedTab = 5 }
                     )
+                    5 -> CreditsScreen()
                 }
             }
         }

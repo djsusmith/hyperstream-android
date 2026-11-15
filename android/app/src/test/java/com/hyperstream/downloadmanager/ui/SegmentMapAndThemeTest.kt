@@ -2,6 +2,7 @@ package com.hyperstream.downloadmanager.ui
 
 import com.hyperstream.downloadmanager.core.SegmentUi
 import com.hyperstream.downloadmanager.ui.components.SegmentMapCalculator
+import com.hyperstream.downloadmanager.ui.screens.HyperStreamCredits
 import com.hyperstream.downloadmanager.ui.theme.MdmThemeStyle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -30,5 +31,14 @@ class SegmentMapAndThemeTest {
         assertEquals(MdmThemeStyle.CLASSIC_IDM, MdmThemeStyle.fromId("classic"))
         assertEquals(MdmThemeStyle.METRO_DARK, MdmThemeStyle.fromId("metro"))
         assertEquals(MdmThemeStyle.MATERIAL_DYNAMIC, MdmThemeStyle.fromId("material"))
+    }
+
+    @Test
+    fun exposesCreatorCreditsMetadata() {
+        assertEquals("Created by Ahnaf Hasan Susmith with Antigravity", HyperStreamCredits.HEADLINE)
+        assertEquals("Ahnaf Hasan Susmith", HyperStreamCredits.CREATOR_NAME)
+        assertEquals("Antigravity", HyperStreamCredits.BUILT_WITH)
+        assertEquals("susdj.96@gmail.com", HyperStreamCredits.CREATOR_EMAIL)
+        assertEquals("mailto:susdj.96@gmail.com", HyperStreamCredits.mailtoUri())
     }
 }

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer glowing cyan ring -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M54,22 A32,32 0 1,1 53.9,22 Z M54,26 A28,28 0 1,0 54.1,26 Z" />
+    <!-- High-speed download arrow shaft & head -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,30 L60,30 L60,54 L70,54 L54,72 L38,54 L48,54 Z" />
+    <!-- Lightning bolt accent (128-Thread HyperStream boost) -->
+    <path
+        android:fillColor="#FFD166"
+        android:pathData="M65,26 L53,46 L61,46 L51,64 L71,42 L62,42 Z" />
+    <!-- Segmented download bar at bottom -->
+    <path
+        android:fillColor="#00F5D4"
+        android:pathData="M34,76 L45,76 L45,81 L34,81 Z" />
+    <path
+        android:fillColor="#00BBF9"
+        android:pathData="M48,76 L59,76 L59,81 L48,81 Z" />
+    <path
+        android:fillColor="#FFD166"
+        android:pathData="M62,76 L74,76 L74,81 L62,81 Z" />
+</vector>

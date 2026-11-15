@@ -12,6 +12,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -34,6 +35,7 @@ fun SettingsAndUpdaterScreen(
     onUpdateSettings: ((SettingsUi) -> SettingsUi) -> Unit,
     onWhitelistDoze: () -> String = { "Doze whitelist requested via Shizuku" },
     onSilentSelfUpdate: () -> String = { "Silent APK update triggered via Shizuku" },
+    onOpenCredits: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val s = state.settings
@@ -168,6 +170,26 @@ fun SettingsAndUpdaterScreen(
                         text = "Active Locale: ${s.localeCode.uppercase()} (86 upstream TSV catalogs bundled, including RTL Arabic/Hebrew/Persian/Urdu) • DNS: ${s.dnsMode} (${s.customDnsServer}) • Remote Control HTTPS Port: ${s.remoteControlPort}",
                         style = MaterialTheme.typography.bodySmall
                     )
+                }
+            }
+        }
+
+        // 5. Creator Credits Summary Card
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = HyperStreamCredits.HEADLINE,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Contact: ${HyperStreamCredits.CREATOR_EMAIL}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedButton(onClick = onOpenCredits) {
+                        Text("Open Full Credits Page")
+                    }
                 }
             }
         }
