@@ -48,7 +48,7 @@ jobs:
           rustup target add aarch64-linux-android
           cargo install cargo-ndk --locked
           cargo test --manifest-path upstream/Cargo.toml -p mdm-android-ffi
-          cargo ndk -t arm64-v8a -o android/app/src/main/jniLibs build --release --manifest-path upstream/Cargo.toml -p mdm-android-ffi
+          (cd upstream && cargo ndk -t arm64-v8a -o ../android/app/src/main/jniLibs build --release -p mdm-android-ffi)
 
       - name: Set up Gradle
         if: steps.check_upstream.outputs.changed == 'true'
@@ -58,7 +58,7 @@ jobs:
         if: steps.check_upstream.outputs.changed == 'true'
         run: |
           gradle -p android :app:testDebugUnitTest :app:assembleRelease
-          cp android/app/build/outputs/apk/release/app-release.apk HyperStream-v${{ steps.check_upstream.outputs.new_ver }}-arm64.apk
+          cp android/app/build/outputs/apk/release/*.apk HyperStream-v${{ steps.check_upstream.outputs.new_ver }}-arm64.apk
 
       - name: Commit Upstream Sync to main
         if: steps.check_upstream.outputs.changed == 'true' && steps.check_upstream.outputs.old_sha != steps.check_upstream.outputs.new_sha
