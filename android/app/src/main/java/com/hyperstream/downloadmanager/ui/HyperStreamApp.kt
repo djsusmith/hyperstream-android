@@ -1,9 +1,12 @@
 package com.hyperstream.downloadmanager.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Grain
@@ -11,15 +14,21 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -27,7 +36,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.hyperstream.downloadmanager.core.MdmRepository
 import com.hyperstream.downloadmanager.core.MdmUiState
 import com.hyperstream.downloadmanager.core.SettingsUi
@@ -42,6 +53,11 @@ import com.hyperstream.downloadmanager.ui.screens.QueuesAndSchedulerScreen
 import com.hyperstream.downloadmanager.ui.screens.SettingsAndUpdaterScreen
 import com.hyperstream.downloadmanager.ui.screens.TorrentsAndRssScreen
 import com.hyperstream.downloadmanager.ui.theme.HyperStreamTheme
+import com.hyperstream.downloadmanager.updater.UpdateChannel
+import com.hyperstream.downloadmanager.updater.UpdateChannelManager
+import com.hyperstream.downloadmanager.updater.UpdateCheckResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun HyperStreamApp(
@@ -108,6 +124,29 @@ fun HyperStreamAppContent(
     var inspectedDownloadId by remember { mutableStateOf<Long?>(null) }
     var activePickerUrl by remember { mutableStateOf<String?>(null) }
 
+    val context = LocalContext.current
+    var availableUpdate by remember { mutableStateOf<UpdateCheckResult.UpdateAvailable?>(null) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
+
+    // Automatic update check on app startup (GitHub Releases API)
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            val channel = if (state.settings.updateChannel.contains("Nightly", ignoreCase = true)) {
+                UpdateChannel.NIGHTLY_BUGFIX
+            } else {
+                UpdateChannel.STABLE
+            }
+            val result = UpdateChannelManager.checkForUpdates(
+                currentVersion = "0.6.0",
+                channel = channel
+            )
+            if (result is UpdateCheckResult.UpdateAvailable) {
+                availableUpdate = result
+                showUpdateDialog = true
+            }
+        }
+    }
+
     // When a link is shared into HyperStream from another app, open the smart format sheet
     val sheetUrl = pendingSharedUrl ?: activePickerUrl
 
@@ -128,6 +167,23 @@ fun HyperStreamAppContent(
                         }
                     },
                     actions = {
+                        availableUpdate?.let { upd ->
+                            Button(
+                                onClick = { showUpdateDialog = true },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                                ),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    text = "🚀 Update v${upd.version}",
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                         IconButton(onClick = { selectedTab = 5 }) {
                             Icon(
                                 imageVector = Icons.Default.Info,
@@ -251,6 +307,56 @@ fun HyperStreamAppContent(
                             selectedTab = 0 // Switch to Downloads tab to see the live download
                             activePickerUrl = null
                             onClearPendingSharedUrl()
+                        }
+                    )
+                }
+
+                // In-App Update Alert Dialog (triggers when new GitHub release is detected)
+                if (showUpdateDialog && availableUpdate != null) {
+                    val update = availableUpdate!!
+                    AlertDialog(
+                        onDismissRequest = { showUpdateDialog = false },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Default.CloudDownload,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        },
+                        title = {
+                            Text(
+                                text = "🚀 Update Available: ${update.releaseName}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = "A new version of HyperStream is ready (${update.tagName}).",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                if (update.releaseNotes.isNotBlank()) {
+                                    Text(
+                                        text = update.releaseNotes.take(250) + if (update.releaseNotes.length > 250) "..." else "",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            Button(onClick = {
+                                showUpdateDialog = false
+                                UpdateChannelManager.startApkDownload(context, update.apkUrl)
+                            }) {
+                                Text("Download APK")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showUpdateDialog = false }) {
+                                Text("Later")
+                            }
                         }
                     )
                 }
