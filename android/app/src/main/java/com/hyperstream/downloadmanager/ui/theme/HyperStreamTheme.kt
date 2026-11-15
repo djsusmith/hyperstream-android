@@ -8,16 +8,37 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 enum class MdmThemeStyle(val id: String, val title: String) {
+    OBSIDIAN_FLAGSHIP("obsidian", "Flagship Obsidian & Indigo (Website Style)"),
     CLASSIC_IDM("classic", "Classic MDM / IDM Cobalt"),
     METRO_DARK("metro", "Metro Midnight OLED"),
     MATERIAL_DYNAMIC("material", "Material 3 HyperStream Emerald");
 
     companion object {
         fun fromId(id: String): MdmThemeStyle {
-            return entries.firstOrNull { it.id.equals(id, ignoreCase = true) } ?: CLASSIC_IDM
+            return entries.firstOrNull { it.id.equals(id, ignoreCase = true) } ?: OBSIDIAN_FLAGSHIP
         }
     }
 }
+
+private val ObsidianFlagshipScheme = darkColorScheme(
+    primary = Color(0xFF818CF8), // Radiant Indigo
+    onPrimary = Color(0xFF0F172A),
+    primaryContainer = Color(0xFF312E81),
+    onPrimaryContainer = Color(0xFFE0E7FF),
+    secondary = Color(0xFF38BDF8), // Sky Blue Accent
+    onSecondary = Color(0xFF0C4A6E),
+    secondaryContainer = Color(0xFF075985),
+    onSecondaryContainer = Color(0xFFE0F2FE),
+    tertiary = Color(0xFF34D399), // Emerald
+    background = Color(0xFF07080C), // Deep Obsidian matching website
+    onBackground = Color(0xFFF8FAFC),
+    surface = Color(0xFF0E1017), // Elevated Card Obsidian
+    onSurface = Color(0xFFF8FAFC),
+    surfaceVariant = Color(0xFF141722),
+    onSurfaceVariant = Color(0xFF94A3B8),
+    outline = Color(0xFF282A36),
+    outlineVariant = Color(0xFF1F2937)
+)
 
 private val ClassicDarkScheme = darkColorScheme(
     primary = Color(0xFF4FC3F7),
@@ -66,7 +87,7 @@ private val ClassicLightScheme = lightColorScheme(
 
 @Composable
 fun HyperStreamTheme(
-    themeId: String = "classic",
+    themeId: String = "obsidian",
     darkModePref: String = "dark",
     content: @Composable () -> Unit
 ) {
@@ -80,6 +101,7 @@ fun HyperStreamTheme(
         ClassicLightScheme
     } else {
         when (style) {
+            MdmThemeStyle.OBSIDIAN_FLAGSHIP -> ObsidianFlagshipScheme
             MdmThemeStyle.CLASSIC_IDM -> ClassicDarkScheme
             MdmThemeStyle.METRO_DARK -> MetroDarkScheme
             MdmThemeStyle.MATERIAL_DYNAMIC -> MaterialEmeraldScheme
