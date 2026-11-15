@@ -1,0 +1,42 @@
+[package]
+name = "mdm-android-ffi"
+description = "Android JNI bridge for HyperStream (Mister Download Manager engine, torrent, debrid, extract, geo, cnl, remote, queues, scheduler, and 86 locales)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[lib]
+name = "mdm_android"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+jni = "0.21.1"
+mdm-engine = { workspace = true }
+mdm-debrid = { workspace = true }
+mdm-extract = { workspace = true }
+mdm-geo = { workspace = true }
+mdm-cnl = { workspace = true }
+mdm-ipc = { workspace = true }
+mdm-remote = { workspace = true }
+craft-atomic = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+url = { workspace = true }
+reqwest = { workspace = true }
+sha2 = { workspace = true }
+md-5 = { workspace = true }
+sha1 = { workspace = true }
+crc32fast = { workspace = true }
+hex = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+mdm-labserver = { workspace = true }
+
+[lints]
+workspace = true

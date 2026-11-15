@@ -480,6 +480,7 @@ pub(crate) fn client_config(extra: &[Vec<u8>]) -> Result<rustls::ClientConfig, r
         return Ok(crate::tls::no_roots_config());
     }
     let provider = crate::tls::provider();
+    #[cfg(not(target_os = "android"))]
     let verifier = if extra.is_empty() {
         Verifier::new(provider.clone())
     } else {
@@ -488,6 +489,11 @@ pub(crate) fn client_config(extra: &[Vec<u8>]) -> Result<rustls::ClientConfig, r
             provider.clone(),
         )
     }?;
+    #[cfg(target_os = "android")]
+    let verifier = {
+        let _ = extra;
+        Verifier::new(provider.clone())?
+    };
     Ok(rustls::ClientConfig::builder_with_provider(provider)
         .with_safe_default_protocol_versions()?
         .dangerous()

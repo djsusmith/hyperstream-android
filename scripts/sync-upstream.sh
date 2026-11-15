@@ -58,10 +58,54 @@ for crate in engine torrent debrid extract geo cnl ipc remote tools labserver cl
     cp -a "$SRC_DIR/crates/$crate" "$ROOT_DIR/upstream/crates/$crate"
   fi
 done
+if [[ -d "$SRC_DIR/crates/app/assets" ]]; then
+  mkdir -p "$ROOT_DIR/upstream/crates/app"
+  rm -rf "$ROOT_DIR/upstream/crates/app/assets"
+  cp -a "$SRC_DIR/crates/app/assets" "$ROOT_DIR/upstream/crates/app/assets"
+fi
 
 cp -a "$SRC_DIR/i18n/." "$ROOT_DIR/upstream/i18n/"
-cp -a "$SRC_DIR/Cargo.toml" "$ROOT_DIR/upstream/Cargo.toml"
-if [[ -f "$SRC_DIR/Cargo.lock" ]]; then
+if [[ ! -f "$ROOT_DIR/upstream/Cargo.toml" ]] || ! grep -q "crates/android-ffi" "$ROOT_DIR/upstream/Cargo.toml"; then
+  cp -a "$SRC_DIR/Cargo.toml" "$ROOT_DIR/upstream/Cargo.toml"
+fi
+if [[ -f "$ROOT_DIR/upstream/crates/engine/Cargo.toml" ]] && ! grep -q 'target_os = "android"' "$ROOT_DIR/upstream/crates/engine/Cargo.toml"; then
+  cat >> "$ROOT_DIR/upstream/crates/engine/Cargo.toml" <<'EOF'
+
+[target.'cfg(target_os = "android")'.dependencies]
+rquickjs = { version = "0.14.0", default-features = false, features = ["std", "bindgen"] }
+EOF
+fi
+if [[ -f "$ROOT_DIR/upstream/crates/engine/src/ftp.rs" ]] && ! grep -q 'target_os = "android"' "$ROOT_DIR/upstream/crates/engine/src/ftp.rs"; then
+  python3 -c '
+p = "'"$ROOT_DIR"'/upstream/crates/engine/src/ftp.rs"
+txt = open(p).read()
+old = """    let verifier = if extra.is_empty() {
+        Verifier::new(provider.clone())
+    } else {
+        Verifier::new_with_extra_roots(
+            extra.iter().map(|c| CertificateDer::from(c.clone())),
+            provider.clone(),
+        )
+    }?;"""
+new = """    #[cfg(not(target_os = "android"))]
+    let verifier = if extra.is_empty() {
+        Verifier::new(provider.clone())
+    } else {
+        Verifier::new_with_extra_roots(
+            extra.iter().map(|c| CertificateDer::from(c.clone())),
+            provider.clone(),
+        )
+    }?;
+    #[cfg(target_os = "android")]
+    let verifier = {
+        let _ = extra;
+        Verifier::new(provider.clone())?
+    };"""
+if old in txt:
+    open(p, "w").write(txt.replace(old, new, 1))
+'
+fi
+if [[ -f "$SRC_DIR/Cargo.lock" && ! -f "$ROOT_DIR/upstream/Cargo.lock" ]]; then
   cp -a "$SRC_DIR/Cargo.lock" "$ROOT_DIR/upstream/Cargo.lock"
 fi
 if [[ -f "$SRC_DIR/LICENSE" ]]; then
