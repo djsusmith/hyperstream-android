@@ -32,12 +32,26 @@ pub fn system_has_roots() -> bool {
     if FOUND.load(Ordering::Relaxed) {
         return true;
     }
-    let found = rustls_platform_verifier::Verifier::new(provider()).is_ok()
+    let found = is_platform_verifier_ok()
         || !webpki_root_certs::TLS_SERVER_ROOT_CERTS.is_empty();
     if found {
         FOUND.store(true, Ordering::Relaxed);
     }
     found
+}
+
+fn is_platform_verifier_ok() -> bool {
+    #[cfg(target_os = "android")]
+    {
+        false
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        std::panic::catch_unwind(|| {
+            rustls_platform_verifier::Verifier::new(provider()).is_ok()
+        })
+        .unwrap_or(false)
+    }
 }
 
 /// `builder` with the TLS it can have here: reqwest's own (the system's verifier) when the
@@ -50,7 +64,7 @@ pub fn configure(builder: reqwest::ClientBuilder) -> reqwest::ClientBuilder {
 
 fn configure_with(builder: reqwest::ClientBuilder, has_roots: bool) -> reqwest::ClientBuilder {
     if has_roots {
-        if rustls_platform_verifier::Verifier::new(provider()).is_ok() {
+        if is_platform_verifier_ok() {
             builder
         } else {
             builder.tls_backend_preconfigured(fallback_roots_config(&[]))

@@ -47,7 +47,34 @@ object LinkParser {
     /** First http(s)/ftp URL inside shared text (captions, hashtags and trailing punctuation stripped). */
     fun extractFirstUrl(rawText: String?): String? {
         if (rawText.isNullOrBlank()) return null
-        return urlRegex.find(rawText)?.value?.trimEnd('.', ',', ';', ')', '!', '?')
+        return urlRegex.find(rawText)?.value?.trimEnd('.', ',', ';', ')', '!', '?', '>', '<', '"', '\'')
+    }
+
+    /** Extracts raw shared text or URL from any incoming Intent (EXTRA_TEXT, ClipData, EXTRA_SUBJECT, data URI). */
+    fun extractRawTextFromIntent(intent: android.content.Intent?): String? {
+        if (intent == null) return null
+        val extraText = intent.getStringExtra(android.content.Intent.EXTRA_TEXT)
+        if (!extraText.isNullOrBlank()) return extraText
+
+        val charSeq = intent.getCharSequenceExtra(android.content.Intent.EXTRA_TEXT)?.toString()
+        if (!charSeq.isNullOrBlank()) return charSeq
+
+        val clip = intent.clipData
+        if (clip != null && clip.itemCount > 0) {
+            for (i in 0 until clip.itemCount) {
+                val item = clip.getItemAt(i)
+                val itemText = item.text?.toString() ?: item.uri?.toString()
+                if (!itemText.isNullOrBlank()) return itemText
+            }
+        }
+
+        val subject = intent.getStringExtra(android.content.Intent.EXTRA_SUBJECT)
+        if (!subject.isNullOrBlank()) return subject
+
+        val data = intent.dataString
+        if (!data.isNullOrBlank()) return data
+
+        return null
     }
 
     /** Human-readable source platform for badges and the format picker. */

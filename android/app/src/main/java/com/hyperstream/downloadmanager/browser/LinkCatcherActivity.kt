@@ -37,12 +37,7 @@ class LinkCatcherActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val candidateText = when (intent?.action) {
-            Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)
-                ?: intent.getStringExtra(Intent.EXTRA_SUBJECT)
-            Intent.ACTION_VIEW -> intent.dataString
-            else -> intent?.dataString ?: intent?.getStringExtra(Intent.EXTRA_TEXT)
-        }
+        val candidateText = LinkParser.extractRawTextFromIntent(intent)
 
         val target = LinkParser.extractDownloadableTarget(candidateText)
         if (target == null) {

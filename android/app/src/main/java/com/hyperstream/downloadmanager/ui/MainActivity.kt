@@ -47,13 +47,26 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleSharedIntent(intent: Intent?) {
-        val url = intent?.getStringExtra(EXTRA_SHARED_URL)?.takeIf { it.isNotBlank() } ?: return
-        val kind = intent.getStringExtra(EXTRA_SHARED_KIND)
-            ?.let { runCatching { LinkKind.valueOf(it) }.getOrNull() }
-            ?: LinkKind.GENERIC_URL
-        intent.removeExtra(EXTRA_SHARED_URL)
-        intent.removeExtra(EXTRA_SHARED_KIND)
-        routeLink(url, kind)
+        if (intent == null) return
+
+        // 1. Forwarded via EXTRA_SHARED_URL from LinkCatcherActivity
+        val forwardedUrl = intent.getStringExtra(EXTRA_SHARED_URL)?.takeIf { it.isNotBlank() }
+        if (forwardedUrl != null) {
+            val kind = intent.getStringExtra(EXTRA_SHARED_KIND)
+                ?.let { runCatching { LinkKind.valueOf(it) }.getOrNull() }
+                ?: LinkKind.GENERIC_URL
+            intent.removeExtra(EXTRA_SHARED_URL)
+            intent.removeExtra(EXTRA_SHARED_KIND)
+            routeLink(forwardedUrl, kind)
+            return
+        }
+
+        // 2. Direct ACTION_SEND or ACTION_VIEW received by MainActivity
+        val candidateText = com.hyperstream.downloadmanager.browser.LinkParser.extractRawTextFromIntent(intent)
+        val target = com.hyperstream.downloadmanager.browser.LinkParser.extractDownloadableTarget(candidateText)
+        if (target != null) {
+            routeLink(target.uri, target.kind)
+        }
     }
 
     /** Torrents are added directly; every other link opens the format & quality picker. */
