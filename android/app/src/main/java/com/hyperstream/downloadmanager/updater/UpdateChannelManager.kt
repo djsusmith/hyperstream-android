@@ -48,7 +48,30 @@ sealed class UpdateCheckResult {
 
 object UpdateChannelManager {
     const val GITHUB_RELEASES_API = "https://api.github.com/repos/djsusmith/hyperstream-android/releases"
-    const val DEFAULT_FALLBACK_APK = "https://github.com/djsusmith/hyperstream-android/releases/download/v0.6.0/HyperStream-v0.6.0-arm64.apk"
+    const val DEFAULT_FALLBACK_APK = "https://gh-proxy.com/https://github.com/djsusmith/hyperstream-android/releases/download/v0.6.0/HyperStream-v0.6.0-arm64.apk"
+
+    /**
+     * Resolves nearest high-speed CDN mirror for GitHub releases to bypass slow S3 routing.
+     */
+    fun resolveFastCdnUrl(url: String): String {
+        return if (url.startsWith("https://github.com/")) {
+            "https://gh-proxy.com/$url"
+        } else {
+            url
+        }
+    }
+
+    /**
+     * Launches the system browser or download manager to fetch and install the APK via nearest CDN.
+     */
+    fun startApkDownload(context: Context, apkUrl: String) {
+        val raw = if (apkUrl.isNotBlank()) apkUrl else DEFAULT_FALLBACK_APK
+        val target = resolveFastCdnUrl(raw)
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(target)).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        context.startActivity(intent)
+    }
 
     /**
      * Queries GitHub Releases API asynchronously and determines if an update is available
@@ -174,16 +197,6 @@ object UpdateChannelManager {
         }
     }
 
-    /**
-     * Launches the system browser or download manager to fetch and install the APK.
-     */
-    fun startApkDownload(context: Context, apkUrl: String) {
-        val target = if (apkUrl.isNotBlank()) apkUrl else DEFAULT_FALLBACK_APK
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(target)).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
-        context.startActivity(intent)
-    }
 
     fun compareSemver(a: String, b: String): Int {
         val partsA = a.split('.', '-').mapNotNull { it.toIntOrNull() }
