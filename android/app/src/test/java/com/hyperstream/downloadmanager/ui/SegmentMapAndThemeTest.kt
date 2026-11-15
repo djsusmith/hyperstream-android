@@ -1,5 +1,6 @@
 package com.hyperstream.downloadmanager.ui
 
+import com.hyperstream.downloadmanager.core.MdmRepository
 import com.hyperstream.downloadmanager.core.SegmentUi
 import com.hyperstream.downloadmanager.ui.components.SegmentMapCalculator
 import com.hyperstream.downloadmanager.ui.screens.HyperStreamCredits
@@ -40,5 +41,18 @@ class SegmentMapAndThemeTest {
         assertEquals("Antigravity", HyperStreamCredits.BUILT_WITH)
         assertEquals("susdj.96@gmail.com", HyperStreamCredits.CREATOR_EMAIL)
         assertEquals("mailto:susdj.96@gmail.com", HyperStreamCredits.mailtoUri())
+    }
+
+    @Test
+    fun verifiesStandardCategoryFilterRailAndTabs() {
+        val expectedCategories = listOf("All", "Unfinished", "Finished", "Video", "Music", "Compressed", "Documents", "Programs")
+        val stateCategories = MdmRepository.sampleInitialState().categories
+        assertTrue(expectedCategories.all { cat ->
+            cat in listOf("All", "Unfinished", "Finished") || cat in stateCategories
+        })
+
+        val initial = MdmRepository.sampleInitialState()
+        assertEquals(128, initial.activeThreadsTotal)
+        assertTrue(initial.wakeLockActive)
     }
 }

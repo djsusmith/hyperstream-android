@@ -1,6 +1,8 @@
 package com.hyperstream.downloadmanager.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -302,7 +304,7 @@ fun SmartFormatPickerSheet(
                         )
                     }
 
-                    // Stream List
+                    // Stream List with clean borders, resolution, codec details, watermark pill & file size badge
                     val activeStreams = if (selectedTab == 0) videoStreams else audioStreams
                     LazyColumn(
                         modifier = Modifier
@@ -313,8 +315,12 @@ fun SmartFormatPickerSheet(
                         items(activeStreams) { stream ->
                             val isSelected = selectedStream?.url == stream.url && selectedStream?.label == stream.label
                             Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                border = BorderStroke(
+                                    width = if (isSelected) 1.5.dp else 1.dp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                ),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable { selectedStream = stream }
@@ -338,37 +344,63 @@ fun SmartFormatPickerSheet(
                                                 color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
                                             )
                                             if (stream.watermarkFree && stream.formatKind == "video") {
-                                                Text(
-                                                    text = "No Watermark",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = Color(0xFF00E676),
-                                                    fontWeight = FontWeight.Bold
-                                                )
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = Color(0xFF00E676).copy(alpha = 0.15f)
+                                                ) {
+                                                    Text(
+                                                        text = "No Watermark",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = Color(0xFF00E676),
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                                    )
+                                                }
                                             }
                                         }
                                         val sizeStr = if (stream.sizeBytes > 0) formatBytes(stream.sizeBytes) else "Dynamic Stream"
-                                        Text(
-                                            text = "${stream.ext.uppercase()} • $sizeStr",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                                        val codecInfo = when {
+                                            stream.label.contains("AV1", ignoreCase = true) -> "AV1 HDR • "
+                                            stream.label.contains("H.264", ignoreCase = true) -> "H.264 • "
+                                            stream.label.contains("Fast", ignoreCase = true) -> "Fast • "
+                                            else -> ""
+                                        }
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "${stream.ext.uppercase()} • $codecInfo$sizeStr",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
                                     }
                                     if (isSelected) {
-                                        Icon(
-                                            Icons.Default.Check,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(20.dp)
-                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.primary),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onPrimary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
 
-                    HorizontalDivider()
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                    // Thread count selector (16T, 32T, 64T, 128T)
+                    // Engine Acceleration selector row with connection pills: [16T], [32T], [64T], [128T]
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -376,24 +408,30 @@ fun SmartFormatPickerSheet(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             Icon(Icons.Default.Bolt, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-                            Text("Engine Acceleration:", style = MaterialTheme.typography.labelMedium)
+                            Text("Engine Acceleration:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             listOf(16, 32, 64, 128).forEach { conns ->
+                                val active = selectedConnections == conns
                                 FilterChip(
-                                    selected = selectedConnections == conns,
+                                    selected = active,
                                     onClick = { selectedConnections = conns },
-                                    label = { Text("${conns}T") },
+                                    label = { Text("${conns}T", fontWeight = if (active) FontWeight.Bold else FontWeight.Normal) },
                                     colors = FilterChipDefaults.filterChipColors(
                                         selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    ),
+                                    border = BorderStroke(
+                                        width = if (active) 1.5.dp else 1.dp,
+                                        color = if (active) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                                     )
                                 )
                             }
                         }
                     }
 
-                    // Download Button
+                    // Primary Action Button: Download icon + Start Download (<format> • <N> Threads)
                     Button(
                         onClick = {
                             val target = selectedStream ?: activeStreams.firstOrNull()
@@ -407,6 +445,10 @@ fun SmartFormatPickerSheet(
                                 onDismiss()
                             }
                         },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp),
