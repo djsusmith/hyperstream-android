@@ -288,6 +288,60 @@
       color: #34d399;
     }
 
+    /* Play Protect & Security Notice Card */
+    .security-badge-card {
+      background: rgba(16, 185, 129, 0.05);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      border-radius: 16px;
+      padding: 16px 20px;
+      max-width: 680px;
+      margin: 0 auto 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      text-align: left;
+    }
+    .sec-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .sec-icon {
+      font-size: 1.6rem;
+      flex-shrink: 0;
+    }
+    .sec-text h4 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #34d399;
+      margin-bottom: 3px;
+    }
+    .sec-text p {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.45;
+    }
+    .sec-tags {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .sec-tag {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.12);
+      padding: 3px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+    @media (max-width: 640px) {
+      .security-badge-card { flex-direction: column; align-items: flex-start; }
+      .sec-tags { flex-direction: row; flex-wrap: wrap; }
+    }
+
     /* Live Interactive Phone / Engine Simulator */
     .simulator-card {
       background: linear-gradient(180deg, rgba(20, 24, 38, 0.85) 0%, rgba(12, 14, 22, 0.95) 100%);
@@ -616,6 +670,22 @@
         <button class="mirror-btn active" onclick="setMirror('cdn', this)">Cloudflare Edge (Fastest)</button>
         <button class="mirror-btn" onclick="setMirror('gh', this)">GitHub Direct</button>
         <button class="mirror-btn" onclick="setMirror('alt', this)">Alt Fast Mirror</button>
+      </div>
+
+      <!-- Play Protect & 100% Safety Reassurance -->
+      <div class="security-badge-card">
+        <div class="sec-left">
+          <div class="sec-icon">🛡️</div>
+          <div class="sec-text">
+            <h4>100% Verified Safe, Open Source & Ad-Free</h4>
+            <p>HyperStream is open-source under GPLv3 with 0 trackers and 0 adware. If Google Play Protect displays <em>"App scan recommended"</em> on first sideload, tap <strong>"Install without scanning"</strong> or let Google scan it — your device is 100% secure.</p>
+          </div>
+        </div>
+        <div class="sec-tags">
+          <span class="sec-tag">✓ GPLv3 Verified</span>
+          <span class="sec-tag">✓ Zero Adware</span>
+          <span class="sec-tag">✓ 0 Loggers</span>
+        </div>
       </div>
     </section>
 
