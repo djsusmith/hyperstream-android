@@ -32,7 +32,7 @@
         </activity>
 
         <activity
-            android:name=".intercept.LinkCatcherActivity"
+            android:name=".browser.LinkCatcherActivity"
             android:exported="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <!-- Share Sheet (ACTION_SEND) -->
