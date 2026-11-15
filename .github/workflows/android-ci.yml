@@ -27,12 +27,15 @@ jobs:
           rustup toolchain install nightly --profile minimal
           rustup default nightly
           rustup target add aarch64-linux-android
+          cargo install cargo-ndk --locked
 
       - name: Verify Upstream Sync Script
         run: bash scripts/test-sync-upstream.sh
 
-      - name: Run Rust JNI Bridge Unit Tests
-        run: cargo test --manifest-path upstream/Cargo.toml -p mdm-android-ffi
+      - name: Run Rust JNI Bridge Unit Tests & Build arm64-v8a Library
+        run: |
+          cargo test --manifest-path upstream/Cargo.toml -p mdm-android-ffi
+          cargo ndk -t arm64-v8a -o android/app/src/main/jniLibs build --release --manifest-path upstream/Cargo.toml -p mdm-android-ffi
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4

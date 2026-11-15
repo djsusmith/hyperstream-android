@@ -7,6 +7,32 @@ import androidx.activity.ComponentActivity
 import com.hyperstream.downloadmanager.core.MdmNative
 import com.hyperstream.downloadmanager.service.HyperStreamDownloadService
 
+object LinkCatcherDispatcher {
+    fun dispatchSharedText(
+        rawText: String?,
+        dataDir: String = "/storage/emulated/0/Download/HyperStream/.data",
+        downloadsDir: String = "/storage/emulated/0/Download/HyperStream",
+        initFn: (String, String) -> Boolean = MdmNative::safeInit,
+        executeFn: (String) -> String = MdmNative::safeExecuteCommand
+    ): ParsedLinkTarget? {
+        val parsed = LinkParser.extractDownloadableTarget(rawText) ?: return null
+        initFn(dataDir, downloadsDir)
+        when (parsed.kind) {
+            LinkKind.MAGNET, LinkKind.TORRENT_FILE -> {
+                executeFn(
+                    """{"op":"add_torrent","source":"${parsed.uri.replace("\"", "\\\"")}","sequential":true}"""
+                )
+            }
+            else -> {
+                executeFn(
+                    """{"op":"add_download","url":"${parsed.uri.replace("\"", "\\\"")}","connections":128}"""
+                )
+            }
+        }
+        return parsed
+    }
+}
+
 class LinkCatcherActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -17,13 +43,16 @@ class LinkCatcherActivity : ComponentActivity() {
             else -> intent?.dataString ?: intent?.getStringExtra(Intent.EXTRA_TEXT)
         }
 
-        val parsed = LinkParser.extractDownloadableTarget(candidateText)
+        val dataDir = filesDir.resolve("hyperstream_data").absolutePath
+        val downloadsDir = "/storage/emulated/0/Download/HyperStream"
+        val parsed = LinkCatcherDispatcher.dispatchSharedText(
+            rawText = candidateText,
+            dataDir = dataDir,
+            downloadsDir = downloadsDir
+        )
         if (parsed != null) {
             when (parsed.kind) {
                 LinkKind.MAGNET, LinkKind.TORRENT_FILE -> {
-                    MdmNative.safeExecuteCommand(
-                        """{"op":"add_torrent","source":"${parsed.uri.replace("\"", "\\\"")}","sequential":true}"""
-                    )
                     Toast.makeText(
                         this,
                         "HyperStream: Added Torrent (${parsed.suggestedName ?: "Magnet"})",
@@ -31,9 +60,6 @@ class LinkCatcherActivity : ComponentActivity() {
                     ).show()
                 }
                 else -> {
-                    MdmNative.safeExecuteCommand(
-                        """{"op":"add_download","url":"${parsed.uri.replace("\"", "\\\"")}","connections":128}"""
-                    )
                     Toast.makeText(
                         this,
                         "HyperStream: Catching ${parsed.suggestedName ?: parsed.uri} (128 Threads)",

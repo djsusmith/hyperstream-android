@@ -16,6 +16,10 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -28,9 +32,13 @@ import com.hyperstream.downloadmanager.ui.theme.MdmThemeStyle
 fun SettingsAndUpdaterScreen(
     state: MdmUiState,
     onUpdateSettings: ((SettingsUi) -> SettingsUi) -> Unit,
+    onWhitelistDoze: () -> String = { "Doze whitelist requested via Shizuku" },
+    onSilentSelfUpdate: () -> String = { "Silent APK update triggered via Shizuku" },
     modifier: Modifier = Modifier
 ) {
     val s = state.settings
+    var shizukuStatusMessage by remember { mutableStateOf<String?>(null) }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(12.dp),
@@ -114,12 +122,25 @@ fun SettingsAndUpdaterScreen(
                         )
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = {}, enabled = s.shizukuEnabled) {
+                        Button(
+                            onClick = { shizukuStatusMessage = onWhitelistDoze() },
+                            enabled = s.shizukuEnabled
+                        ) {
                             Text("Whitelist Doze")
                         }
-                        Button(onClick = {}, enabled = s.shizukuEnabled) {
+                        Button(
+                            onClick = { shizukuStatusMessage = onSilentSelfUpdate() },
+                            enabled = s.shizukuEnabled
+                        ) {
                             Text("Silent Self-Update")
                         }
+                    }
+                    shizukuStatusMessage?.let { msg ->
+                        Text(
+                            text = msg,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             }

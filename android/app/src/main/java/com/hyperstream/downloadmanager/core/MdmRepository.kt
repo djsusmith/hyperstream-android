@@ -1,38 +1,57 @@
 package com.hyperstream.downloadmanager.core
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 
 class MdmRepository(
     private val dataDir: String = "/storage/emulated/0/Download/HyperStream/.data",
-    private val downloadsDir: String = "/storage/emulated/0/Download/HyperStream"
+    private val downloadsDir: String = "/storage/emulated/0/Download/HyperStream",
+    private val autoPoll: Boolean = true
 ) {
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
     }
 
+    private val pollScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _uiState = MutableStateFlow(sampleInitialState())
     val uiState: StateFlow<MdmUiState> = _uiState.asStateFlow()
 
     init {
         if (MdmNative.safeInit(dataDir, downloadsDir)) {
             refreshFromNative()
+            if (autoPoll) {
+                pollScope.launch {
+                    while (isActive) {
+                        refreshFromNative()
+                        delay(150L)
+                    }
+                }
+            }
         }
+    }
+
+    fun applySnapshotJson(raw: String): Boolean {
+        if (raw.isBlank() || raw == "{}") return false
+        return runCatching {
+            val parsed = json.decodeFromString<MdmUiState>(raw)
+            _uiState.value = parsed
+            true
+        }.getOrDefault(false)
     }
 
     fun refreshFromNative() {
         val raw = MdmNative.safeGetSnapshotJson() ?: return
-        if (raw.isBlank() || raw == "{}") return
-        runCatching {
-            val parsed = json.decodeFromString<MdmUiState>(raw)
-            if (parsed.downloads.isNotEmpty() || parsed.torrents.isNotEmpty()) {
-                _uiState.value = parsed
-            }
-        }
+        applySnapshotJson(raw)
     }
 
     fun addDownload(
@@ -101,6 +120,17 @@ class MdmRepository(
         }
     }
 
+    fun toggleQueue(queueName: String, running: Boolean) {
+        val op = if (running) "start_queue" else "stop_queue"
+        MdmNative.safeExecuteCommand("""{"op":"$op","name":${json.encodeToString(kotlinx.serialization.serializer(), queueName)}}""")
+        _uiState.update { state ->
+            val nextQueues = state.queues.map { q ->
+                if (q.name == queueName) q.copy(running = running) else q
+            }
+            state.copy(queues = nextQueues)
+        }
+    }
+
     fun addTorrent(source: String, sequential: Boolean = true) {
         MdmNative.safeExecuteCommand("""{"op":"add_torrent","source":${json.encodeToString(kotlinx.serialization.serializer(), source)},"sequential":$sequential}""")
         val newId = (_uiState.value.torrents.maxOfOrNull { it.id } ?: 0L) + 1L
@@ -132,6 +162,8 @@ class MdmRepository(
     }
 
     companion object {
+        val shared: MdmRepository by lazy { MdmRepository() }
+
         fun sampleInitialState(): MdmUiState {
             val segments128 = (0 until 128).map { idx ->
                 val chunk = 32L * 1024L * 1024L

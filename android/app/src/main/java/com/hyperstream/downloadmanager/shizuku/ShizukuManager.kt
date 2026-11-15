@@ -1,5 +1,7 @@
 package com.hyperstream.downloadmanager.shizuku
 
+import java.io.File
+
 sealed class ShizukuResult {
     data class Success(val output: String) : ShizukuResult()
     data class Failure(val exitCode: Int, val error: String) : ShizukuResult()
@@ -77,9 +79,18 @@ class ShizukuManager(
     }
 
     companion object {
+        fun candidateRishPaths(): List<String> = listOf(
+            "/data/user/0/com.agy/files/usr/bin/rish",
+            "/data/data/com.termux/files/usr/bin/rish",
+            "rish"
+        )
+
         fun defaultRishRunner(command: String): Pair<Int, String> {
+            val binary = candidateRishPaths().firstOrNull { path ->
+                path == "rish" || File(path).canExecute()
+            } ?: "rish"
             return try {
-                val proc = ProcessBuilder("rish", "-c", command)
+                val proc = ProcessBuilder(binary, "-c", command)
                     .redirectErrorStream(true)
                     .start()
                 val output = proc.inputStream.bufferedReader().readText()

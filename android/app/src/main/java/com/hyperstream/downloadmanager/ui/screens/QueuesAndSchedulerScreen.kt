@@ -23,6 +23,7 @@ import com.hyperstream.downloadmanager.core.MdmUiState
 @Composable
 fun QueuesAndSchedulerScreen(
     state: MdmUiState,
+    onToggleQueue: (String, Boolean) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -39,7 +40,7 @@ fun QueuesAndSchedulerScreen(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "While any queue is active, HyperStreamDownloadService holds PARTIAL_WAKE_LOCK + WIFI_MODE_FULL_HIGH_PERF so Android never suspends multi-gigabyte overnight transfers.",
+                        text = "While any queue has active or queued transfers, HyperStreamDownloadService holds PARTIAL_WAKE_LOCK + WIFI_MODE_FULL_HIGH_PERF so Android never suspends multi-gigabyte overnight transfers.",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -68,7 +69,10 @@ fun QueuesAndSchedulerScreen(
                         }
                         Text(windowText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                     }
-                    Switch(checked = q.running, onCheckedChange = {})
+                    Switch(
+                        checked = q.running,
+                        onCheckedChange = { next -> onToggleQueue(q.name, next) }
+                    )
                 }
             }
         }

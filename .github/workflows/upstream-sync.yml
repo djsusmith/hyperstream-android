@@ -40,14 +40,17 @@ jobs:
           distribution: "temurin"
           java-version: "21"
 
-      - name: Set up Rust & Build libmdm_android.so
+      - name: Set up Rust & Cross-Compile libmdm_android.so (arm64-v8a)
         if: steps.check_upstream.outputs.changed == 'true'
         run: |
           rustup toolchain install nightly --profile minimal
           rustup default nightly
+          rustup target add aarch64-linux-android
+          cargo install cargo-ndk --locked
           cargo test --manifest-path upstream/Cargo.toml -p mdm-android-ffi
+          cargo ndk -t arm64-v8a -o android/app/src/main/jniLibs build --release --manifest-path upstream/Cargo.toml -p mdm-android-ffi
 
-      - name: Build Signed Release APK
+      - name: Set up Gradle
         if: steps.check_upstream.outputs.changed == 'true'
         uses: gradle/actions/setup-gradle@v4
 
@@ -62,7 +65,7 @@ jobs:
         run: |
           git config user.name "HyperStream Upstream Sync Bot"
           git config user.email "actions@github.com"
-          git add upstream/
+          git add upstream/ android/app/src/main/jniLibs/arm64-v8a/libmdm_android.so
           git commit -m "chore(upstream): sync anefzaoui/misterdownloadmanager @ ${{ steps.check_upstream.outputs.new_sha }}"
           git push origin HEAD:main
 

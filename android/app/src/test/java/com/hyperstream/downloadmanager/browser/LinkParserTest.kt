@@ -1,8 +1,10 @@
 package com.hyperstream.downloadmanager.browser
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LinkParserTest {
@@ -25,5 +27,56 @@ class LinkParserTest {
     fun identifiesVideoPagesVsDirectArchives() {
         val yt = LinkParser.extractDownloadableTarget("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
         assertEquals(LinkKind.VIDEO_STREAM_PAGE, yt?.kind)
+    }
+
+    @Test
+    fun coldStartLinkDispatchInitializesNativeBeforeExecutingCommand() {
+        val events = mutableListOf<String>()
+        val dispatched = LinkCatcherDispatcher.dispatchSharedText(
+            rawText = "Check https://example.com/archive.zip",
+            dataDir = "/tmp/data",
+            downloadsDir = "/tmp/dl",
+            initFn = { d, dl ->
+                events.add("init:$d:$dl")
+                true
+            },
+            executeFn = { cmd ->
+                events.add("exec:$cmd")
+                """{"ok":true}"""
+            }
+        )
+        assertNotNull(dispatched)
+        assertEquals(2, events.size)
+        assertTrue(events[0].startsWith("init:"))
+        assertTrue(events[1].contains("\"op\":\"add_download\""))
+    }
+
+    @Test
+    fun videoGrabberRecordsMediaUrlOnMainPosterWithoutDuplicates() {
+        val list = mutableListOf<String>()
+        var postedOnMain = false
+        VideoGrabberMediaTracker.onInterceptedUrl(
+            reqUrl = "https://cdn.example.org/video/master.m3u8?token=1",
+            detectedMediaUrls = list,
+            mainPoster = { block ->
+                postedOnMain = true
+                block()
+            }
+        )
+        assertTrue(postedOnMain)
+        assertEquals(listOf("https://cdn.example.org/video/master.m3u8?token=1"), list)
+
+        // Non-media URL should not be added
+        postedOnMain = false
+        VideoGrabberMediaTracker.onInterceptedUrl(
+            reqUrl = "https://cdn.example.org/style.css",
+            detectedMediaUrls = list,
+            mainPoster = { block ->
+                postedOnMain = true
+                block()
+            }
+        )
+        assertFalse(postedOnMain)
+        assertEquals(1, list.size)
     }
 }

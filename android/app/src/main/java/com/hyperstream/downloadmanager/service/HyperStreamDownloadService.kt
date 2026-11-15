@@ -10,20 +10,36 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import com.hyperstream.downloadmanager.core.MdmRepository
 import com.hyperstream.downloadmanager.core.MdmUiState
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 class HyperStreamDownloadService : Service() {
     private var cpuWakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override fun onCreate() {
         super.onCreate()
         ensureNotificationChannel()
+        serviceScope.launch {
+            MdmRepository.shared.uiState.collectLatest { state ->
+                syncWithState(state)
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIFICATION_ID, buildNotification("HyperStream 128-Thread Engine Ready", "Monitoring downloads & queues"))
-        acquireLocks()
+        startForeground(
+            NOTIFICATION_ID,
+            buildNotification("HyperStream 128-Thread Engine Ready", "Monitoring downloads & queues")
+        )
+        syncWithState(MdmRepository.shared.uiState.value)
         return START_STICKY
     }
 
@@ -86,6 +102,7 @@ class HyperStreamDownloadService : Service() {
     }
 
     override fun onDestroy() {
+        serviceScope.cancel()
         releaseLocks()
         super.onDestroy()
     }

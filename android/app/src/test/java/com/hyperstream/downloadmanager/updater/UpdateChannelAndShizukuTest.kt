@@ -62,4 +62,24 @@ class UpdateChannelAndShizukuTest {
         val res = mgr.whitelistFromDoze()
         assertTrue(res is ShizukuResult.Unavailable)
     }
+
+    @Test
+    fun shizukuResolvesFallbackBinaryCandidatesAndExecutesActions() {
+        val candidates = ShizukuManager.candidateRishPaths()
+        assertTrue(candidates.contains("rish"))
+        assertTrue(candidates.any { it.endsWith("/bin/rish") })
+
+        val executed = mutableListOf<String>()
+        val mgr = ShizukuManager(
+            enabled = true,
+            commandRunner = { cmd ->
+                executed.add(cmd)
+                0 to "Success\nuid=2000(shell)"
+            }
+        )
+        assertTrue(mgr.whitelistFromDoze() is ShizukuResult.Success)
+        assertTrue(mgr.silentInstallApk("/storage/emulated/0/Download/HyperStream-v0.5.2-arm64.apk") is ShizukuResult.Success)
+        assertTrue(executed.any { it.contains("deviceidle whitelist") })
+        assertTrue(executed.any { it.contains("pm install -r") })
+    }
 }

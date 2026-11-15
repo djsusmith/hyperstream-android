@@ -16,6 +16,8 @@ object WakeLockCoordinator {
         "Completing"
     )
 
+    private val queuedOrActiveDownloadStates = activeDownloadStates + "Queued"
+
     private val activeTorrentStates = setOf(
         "Metadata",
         "Downloading",
@@ -29,7 +31,11 @@ object WakeLockCoordinator {
     ): Boolean {
         val hasActiveDownload = downloads.any { it.status in activeDownloadStates }
         val hasActiveTorrent = torrents.any { it.status in activeTorrentStates }
-        val hasRunningQueue = queues.any { it.running }
-        return hasActiveDownload || hasActiveTorrent || hasRunningQueue
+        val hasRunningQueueWithPendingWork = queues.any { q ->
+            q.running &&
+                q.itemIds.isNotEmpty() &&
+                downloads.any { it.id in q.itemIds && it.status in queuedOrActiveDownloadStates }
+        }
+        return hasActiveDownload || hasActiveTorrent || hasRunningQueueWithPendingWork
     }
 }

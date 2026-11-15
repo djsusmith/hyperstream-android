@@ -25,6 +25,32 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 
+object VideoGrabberMediaTracker {
+    fun isSniffableMediaUrl(url: String): Boolean {
+        val lower = url.lowercase().substringBefore('?')
+        return lower.endsWith(".m3u8") ||
+            lower.endsWith(".mpd") ||
+            lower.endsWith(".mp4") ||
+            lower.endsWith(".webm") ||
+            lower.endsWith(".mkv") ||
+            lower.contains("/videoplayback")
+    }
+
+    fun onInterceptedUrl(
+        reqUrl: String?,
+        detectedMediaUrls: MutableList<String>,
+        mainPoster: (() -> Unit) -> Unit
+    ) {
+        if (reqUrl != null && isSniffableMediaUrl(reqUrl)) {
+            mainPoster {
+                if (!detectedMediaUrls.contains(reqUrl)) {
+                    detectedMediaUrls.add(0, reqUrl)
+                }
+            }
+        }
+    }
+}
+
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun VideoGrabberWebView(
@@ -49,11 +75,11 @@ fun VideoGrabberWebView(
                             request: WebResourceRequest?
                         ): WebResourceResponse? {
                             val reqUrl = request?.url?.toString()
-                            if (reqUrl != null && isSniffableMediaUrl(reqUrl)) {
-                                if (!detectedMediaUrls.contains(reqUrl)) {
-                                    detectedMediaUrls.add(0, reqUrl)
-                                }
-                            }
+                            VideoGrabberMediaTracker.onInterceptedUrl(
+                                reqUrl = reqUrl,
+                                detectedMediaUrls = detectedMediaUrls,
+                                mainPoster = { block -> view?.post(block) }
+                            )
                             return super.shouldInterceptRequest(view, request)
                         }
 
@@ -97,16 +123,6 @@ fun VideoGrabberWebView(
             }
         )
     }
-}
-
-private fun isSniffableMediaUrl(url: String): Boolean {
-    val lower = url.lowercase().substringBefore('?')
-    return lower.endsWith(".m3u8") ||
-        lower.endsWith(".mpd") ||
-        lower.endsWith(".mp4") ||
-        lower.endsWith(".webm") ||
-        lower.endsWith(".mkv") ||
-        lower.contains("/videoplayback")
 }
 
 private const val VIDEO_DOM_SNIFFER_JS = """

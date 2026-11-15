@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.hyperstream.downloadmanager.browser.VideoGrabberWebView
 
 @Composable
 fun GrabberScreen(
@@ -29,14 +31,13 @@ fun GrabberScreen(
 ) {
     var videoPageUrl by remember { mutableStateOf("https://www.youtube.com/watch?v=aqz-KE-bpKQ") }
     var batchPattern by remember { mutableStateOf("https://mirror.example.org/part[01-10].rar") }
-    var probedQualities by remember {
-        mutableStateOf(
-            listOf(
-                "2160p 4K60 HDR (MP4 + AAC • 128 Threads)",
-                "1440p QHD (WebM + Opus • 128 Threads)",
-                "1080p Full HD (MP4 • 128 Threads)",
-                "Audio Only (M4A / Opus 160kbps)"
-            )
+    var showEmbeddedBrowser by remember { mutableStateOf(false) }
+    val probedQualities = remember {
+        listOf(
+            "2160p 4K60 HDR (MP4 + AAC • 128 Threads)",
+            "1440p QHD (WebM + Opus • 128 Threads)",
+            "1080p Full HD (MP4 • 128 Threads)",
+            "Audio Only (M4A / Opus 160kbps)"
         )
     }
 
@@ -65,6 +66,23 @@ fun GrabberScreen(
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
+                    OutlinedButton(
+                        onClick = { showEmbeddedBrowser = !showEmbeddedBrowser }
+                    ) {
+                        Text(
+                            if (showEmbeddedBrowser) "Hide Built-In Browser Sniffer"
+                            else "Open Built-In Browser Sniffer (Floating Download Video Button)"
+                        )
+                    }
+                    if (showEmbeddedBrowser) {
+                        VideoGrabberWebView(
+                            initialUrl = videoPageUrl,
+                            onDownloadDetectedMedia = { url -> onQueueUrls(listOf(url)) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(340.dp)
+                        )
+                    }
                     probedQualities.forEach { q ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),

@@ -29,6 +29,8 @@ import com.hyperstream.downloadmanager.core.DownloadItemUi
 import com.hyperstream.downloadmanager.core.MdmRepository
 import com.hyperstream.downloadmanager.core.MdmUiState
 import com.hyperstream.downloadmanager.core.SettingsUi
+import com.hyperstream.downloadmanager.shizuku.ShizukuManager
+import com.hyperstream.downloadmanager.shizuku.ShizukuResult
 import com.hyperstream.downloadmanager.ui.screens.DownloadsScreen
 import com.hyperstream.downloadmanager.ui.screens.GrabberScreen
 import com.hyperstream.downloadmanager.ui.screens.ProgressInspectorSheet
@@ -39,17 +41,36 @@ import com.hyperstream.downloadmanager.ui.theme.HyperStreamTheme
 
 @Composable
 fun HyperStreamApp(
-    repository: MdmRepository = remember { MdmRepository() }
+    repository: MdmRepository = remember { MdmRepository.shared }
 ) {
     val state by repository.uiState.collectAsState()
+    val shizukuManager = remember(state.settings.shizukuEnabled) {
+        ShizukuManager(enabled = state.settings.shizukuEnabled)
+    }
     HyperStreamAppContent(
         state = state,
         onAddDownload = { url, conns, cat, checksum ->
             repository.addDownload(url = url, category = cat, connections = conns, checksumExpected = checksum)
         },
         onTogglePauseResume = { repository.togglePauseResume(it) },
+        onToggleQueue = { qName, running -> repository.toggleQueue(qName, running) },
         onAddMagnet = { src, seq -> repository.addTorrent(src, seq) },
-        onUpdateSettings = { repository.updateSettings(it) }
+        onUpdateSettings = { repository.updateSettings(it) },
+        onWhitelistDoze = {
+            when (val res = shizukuManager.whitelistFromDoze()) {
+                is ShizukuResult.Success -> "Shizuku: Doze exemption applied (${res.output})"
+                is ShizukuResult.Unavailable -> "Shizuku unavailable: ${res.reason}"
+                is ShizukuResult.Failure -> "Shizuku error (${res.exitCode}): ${res.error}"
+            }
+        },
+        onSilentSelfUpdate = {
+            val apkPath = "/storage/emulated/0/Download/HyperStream-v${state.settings.upstreamVersion}-arm64.apk"
+            when (val res = shizukuManager.silentInstallApk(apkPath)) {
+                is ShizukuResult.Success -> "Shizuku: Installed $apkPath (${res.output})"
+                is ShizukuResult.Unavailable -> "Shizuku unavailable: ${res.reason}"
+                is ShizukuResult.Failure -> "Shizuku error (${res.exitCode}): ${res.error}"
+            }
+        }
     )
 }
 
@@ -60,8 +81,11 @@ fun HyperStreamAppContent(
     initialTab: Int = 0,
     onAddDownload: (url: String, connections: Int, category: String, checksum: String?) -> Unit = { _, _, _, _ -> },
     onTogglePauseResume: (Long) -> Unit = {},
+    onToggleQueue: (String, Boolean) -> Unit = { _, _ -> },
     onAddMagnet: (String, Boolean) -> Unit = { _, _ -> },
-    onUpdateSettings: ((SettingsUi) -> SettingsUi) -> Unit = {}
+    onUpdateSettings: ((SettingsUi) -> SettingsUi) -> Unit = {},
+    onWhitelistDoze: () -> String = { "Doze whitelist requested via Shizuku" },
+    onSilentSelfUpdate: () -> String = { "Silent APK update triggered via Shizuku" }
 ) {
     var selectedTab by remember { mutableIntStateOf(initialTab) }
     var selectedCategory by remember { mutableStateOf("All") }
@@ -149,10 +173,15 @@ fun HyperStreamAppContent(
                             selectedTab = 0
                         }
                     )
-                    3 -> QueuesAndSchedulerScreen(state = state)
+                    3 -> QueuesAndSchedulerScreen(
+                        state = state,
+                        onToggleQueue = onToggleQueue
+                    )
                     4 -> SettingsAndUpdaterScreen(
                         state = state,
-                        onUpdateSettings = onUpdateSettings
+                        onUpdateSettings = onUpdateSettings,
+                        onWhitelistDoze = onWhitelistDoze,
+                        onSilentSelfUpdate = onSilentSelfUpdate
                     )
                 }
             }
