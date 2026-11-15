@@ -151,7 +151,8 @@ fun SmartFormatPickerSheet(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    if (probeResult?.watermarkFree == true) {
+                    val hasNoWatermark = probeResult?.watermarkFree == true || probeResult?.streams?.any { it.watermarkFree } == true
+                    if (hasNoWatermark) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = Color(0xFF00E676).copy(alpha = 0.15f),
@@ -333,12 +334,19 @@ fun SmartFormatPickerSheet(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
+                                        val displayLabel = when {
+                                            stream.label.contains("AV1", ignoreCase = true) || stream.label.contains("H.264", ignoreCase = true) || stream.label.contains("Fast", ignoreCase = true) -> stream.label
+                                            stream.label.startsWith("2160p", ignoreCase = true) || stream.label.startsWith("1440p", ignoreCase = true) -> "${stream.label} (AV1 HDR)"
+                                            stream.label.startsWith("1080p", ignoreCase = true) -> "${stream.label} (H.264)"
+                                            stream.label.startsWith("360p", ignoreCase = true) -> "${stream.label} (Video + Audio - Fast)"
+                                            else -> stream.label
+                                        }
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
                                             Text(
-                                                text = stream.label,
+                                                text = displayLabel,
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                                 color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
@@ -359,11 +367,10 @@ fun SmartFormatPickerSheet(
                                             }
                                         }
                                         val sizeStr = if (stream.sizeBytes > 0) formatBytes(stream.sizeBytes) else "Dynamic Stream"
-                                        val codecInfo = when {
-                                            stream.label.contains("AV1", ignoreCase = true) -> "AV1 HDR • "
-                                            stream.label.contains("H.264", ignoreCase = true) -> "H.264 • "
-                                            stream.label.contains("Fast", ignoreCase = true) -> "Fast • "
-                                            else -> ""
+                                        val detailText = if (stream.formatKind == "mp3" && stream.bitrateKbps > 0) {
+                                            "${stream.ext.uppercase()} • ${stream.bitrateKbps} kbps • $sizeStr"
+                                        } else {
+                                            "${stream.ext.uppercase()} • $sizeStr"
                                         }
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
@@ -371,7 +378,7 @@ fun SmartFormatPickerSheet(
                                             modifier = Modifier.padding(top = 2.dp)
                                         ) {
                                             Text(
-                                                text = "${stream.ext.uppercase()} • $codecInfo$sizeStr",
+                                                text = detailText,
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -424,7 +431,7 @@ fun SmartFormatPickerSheet(
                                     ),
                                     border = BorderStroke(
                                         width = if (active) 1.5.dp else 1.dp,
-                                        color = if (active) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                                        color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                                     )
                                 )
                             }
@@ -456,7 +463,16 @@ fun SmartFormatPickerSheet(
                     ) {
                         Icon(Icons.Default.Download, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        val optText = selectedStream?.quality ?: "Best Quality"
+                        val optText = when {
+                            !selectedStream?.quality.isNullOrBlank() -> selectedStream?.quality
+                            selectedStream?.label?.contains("360p", ignoreCase = true) == true -> "360p"
+                            selectedStream?.label?.contains("720p", ignoreCase = true) == true -> "720p"
+                            selectedStream?.label?.contains("1080p", ignoreCase = true) == true -> "1080p"
+                            selectedStream?.label?.contains("1440p", ignoreCase = true) == true -> "1440p"
+                            selectedStream?.label?.contains("2160p", ignoreCase = true) == true -> "2160p"
+                            selectedStream?.formatKind == "mp3" -> "MP3"
+                            else -> selectedStream?.ext?.uppercase() ?: "MP4"
+                        }
                         Text("Start Download ($optText • ${selectedConnections} Threads)", fontWeight = FontWeight.Bold)
                     }
                 }

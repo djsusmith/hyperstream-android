@@ -55,4 +55,26 @@ class SegmentMapAndThemeTest {
         assertEquals(128, initial.activeThreadsTotal)
         assertTrue(initial.wakeLockActive)
     }
+
+    @Test
+    fun verifiesFormatPickerActionButtonResolution() {
+        fun resolveOptText(quality: String?, label: String?, ext: String?, formatKind: String): String {
+            return when {
+                !quality.isNullOrBlank() -> quality
+                label?.contains("360p", ignoreCase = true) == true -> "360p"
+                label?.contains("720p", ignoreCase = true) == true -> "720p"
+                label?.contains("1080p", ignoreCase = true) == true -> "1080p"
+                label?.contains("1440p", ignoreCase = true) == true -> "1440p"
+                label?.contains("2160p", ignoreCase = true) == true -> "2160p"
+                formatKind == "mp3" -> "MP3"
+                else -> ext?.uppercase() ?: "MP4"
+            }
+        }
+
+        assertEquals("360p", resolveOptText("360p", "360p MP4 (Video + Audio - Fast)", "mp4", "video"))
+        assertEquals("2160p", resolveOptText("2160p", "2160p MP4 (AV1 HDR)", "mp4", "video"))
+        assertEquals("1080p", resolveOptText(null, "1080p MP4 (H.264)", "mp4", "video"))
+        assertEquals("MP4", resolveOptText(null, "Original File (MP4)", "mp4", "video"))
+        assertEquals("MP3", resolveOptText(null, "Studio Audio", "mp3", "mp3"))
+    }
 }

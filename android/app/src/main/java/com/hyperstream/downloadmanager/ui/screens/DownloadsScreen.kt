@@ -1,5 +1,6 @@
 package com.hyperstream.downloadmanager.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -150,20 +151,29 @@ fun DownloadsScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         // Top Telemetry Banner (Speed, Active 128 Threads, WakeLock badge, Free Disk)
-        Surface(
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.fillMaxWidth()
+        Card(
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(Icons.Default.Speed, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Column {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Icon(
+                        Icons.Default.Speed,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
                             text = formatSpeed(state.totalDownSpeedBps) + " ↓  •  " + formatSpeed(state.totalUpSpeedBps) + " ↑",
                             style = MaterialTheme.typography.titleSmall,
@@ -171,26 +181,52 @@ fun DownloadsScreen(
                         )
                         Text(
                             text = "${state.activeThreadsTotal} Active Threads (Max 128) • Free ${formatBytes(state.freeDiskBytes)}",
-                            style = MaterialTheme.typography.labelSmall
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-                AssistChip(
-                    onClick = { showAddPanel = !showAddPanel },
-                    label = { Text(if (state.wakeLockActive) "WakeLock ON" else "Idle") },
-                    leadingIcon = {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (state.wakeLockActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(
+                        1.dp,
+                        if (state.wakeLockActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f) else MaterialTheme.colorScheme.outlineVariant
+                    ),
+                    modifier = Modifier.clickable { showAddPanel = !showAddPanel }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         Icon(
                             Icons.Default.Bolt,
                             contentDescription = null,
-                            tint = if (state.wakeLockActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                            tint = if (state.wakeLockActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.size(18.dp)
                         )
+                        Column {
+                            Text(
+                                text = "WakeLock",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (state.wakeLockActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (state.wakeLockActive) "ON" else "IDLE",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (state.wakeLockActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                            )
+                        }
                     }
-                )
+                }
             }
         }
 
         // Category Filter Rail
-        val categories = listOf("All", "Unfinished", "Finished", "Video", "Music", "Programs", "Compressed", "Documents")
+        val categories = listOf("All", "Unfinished", "Finished", "Video", "Music", "Compressed", "Documents", "Programs")
         LazyRow(
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -267,20 +303,22 @@ fun DownloadsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(40.dp),
+                    .padding(32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = "No transfers in this view",
+                    text = "No transfers",
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.outline
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Tap '+ Add URL (128T)' or share a link from YouTube, TikTok, Facebook, or your browser.",
+                    text = "Tap '+' Add URL (128T) or share a link from YouTube, TikTok, Facebook, or your browser.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
             }
         } else {
