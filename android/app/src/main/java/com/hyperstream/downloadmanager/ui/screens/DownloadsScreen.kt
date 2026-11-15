@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
@@ -27,10 +28,13 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,6 +44,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -49,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -56,6 +62,7 @@ import com.hyperstream.downloadmanager.browser.LinkParser
 import com.hyperstream.downloadmanager.core.DownloadItemUi
 import com.hyperstream.downloadmanager.core.MdmUiState
 import com.hyperstream.downloadmanager.ui.components.SegmentMapBar
+import com.hyperstream.downloadmanager.util.FileOpener
 
 @Composable
 fun DownloadsScreen(
@@ -69,10 +76,68 @@ fun DownloadsScreen(
     onInspectDownload: (DownloadItemUi) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var showAddPanel by remember { mutableStateOf(false) }
     var newUrl by remember { mutableStateOf("") }
     var newChecksum by remember { mutableStateOf("") }
     var newConnections by remember { mutableFloatStateOf(state.settings.maxConnections.toFloat()) }
+    var itemPendingDelete by remember { mutableStateOf<DownloadItemUi?>(null) }
+    var alsoDeleteFromStorage by remember { mutableStateOf(true) }
+
+    // Permanent Deletion Confirmation Dialog
+    itemPendingDelete?.let { targetItem ->
+        AlertDialog(
+            onDismissRequest = { itemPendingDelete = null },
+            icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("Delete Download?", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Are you sure you want to remove \"${targetItem.name}\"?",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { alsoDeleteFromStorage = !alsoDeleteFromStorage }
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Checkbox(
+                            checked = alsoDeleteFromStorage,
+                            onCheckedChange = { alsoDeleteFromStorage = it }
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Permanently delete file from storage",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (alsoDeleteFromStorage) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val del = alsoDeleteFromStorage
+                        itemPendingDelete = null
+                        if (del) {
+                            FileOpener.deletePhysicalFiles(targetItem)
+                        }
+                        onCancelDownload(targetItem.id, del)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete Permanently")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { itemPendingDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     val filteredDownloads = remember(state.downloads, selectedCategory) {
         when (selectedCategory) {
@@ -229,8 +294,9 @@ fun DownloadsScreen(
                         item = item,
                         onTogglePauseResume = { onTogglePauseResume(item.id) },
                         onRetry = { onRetryDownload(item.id) },
-                        onDelete = { onCancelDownload(item.id, true) },
-                        onInspect = { onInspectDownload(item) }
+                        onDelete = { itemPendingDelete = item },
+                        onInspect = { onInspectDownload(item) },
+                        onOpenFile = { FileOpener.openFile(context, item) }
                     )
                 }
             }
@@ -244,7 +310,8 @@ private fun DownloadItemCard(
     onTogglePauseResume: () -> Unit,
     onRetry: () -> Unit,
     onDelete: () -> Unit,
-    onInspect: () -> Unit
+    onInspect: () -> Unit,
+    onOpenFile: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier
@@ -295,12 +362,36 @@ private fun DownloadItemCard(
                     )
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (item.status == "Failed") {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    if (item.status == "Completed") {
+                        Button(
+                            onClick = onOpenFile,
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.height(34.dp)
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = "Open File", modifier = Modifier.size(15.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Open", fontWeight = FontWeight.Bold)
+                        }
+                        IconButton(onClick = onDelete, modifier = Modifier.size(34.dp)) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    } else if (item.status == "Failed") {
                         IconButton(onClick = onRetry) {
                             Icon(Icons.Default.Refresh, contentDescription = "Retry", tint = MaterialTheme.colorScheme.error)
                         }
-                    } else if (item.status != "Completed") {
+                        IconButton(onClick = onDelete) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.outline)
+                        }
+                    } else {
                         IconButton(onClick = onTogglePauseResume) {
                             val icon = when (item.status) {
                                 "Downloading", "Probing" -> Icons.Default.Pause
@@ -308,13 +399,9 @@ private fun DownloadItemCard(
                             }
                             Icon(icon, contentDescription = item.status, tint = MaterialTheme.colorScheme.primary)
                         }
-                    } else {
-                        Icon(
-                            Icons.Default.CheckCircle,
-                            contentDescription = "Completed",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(8.dp)
-                        )
+                        IconButton(onClick = onDelete) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.outline)
+                        }
                     }
                 }
             }
