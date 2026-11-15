@@ -14,5 +14,8 @@ cargo build --manifest-path "$ROOT_DIR/upstream/Cargo.toml" -p mdm-android-ffi -
 SO_PATH="$ROOT_DIR/upstream/target/release/libmdm_android.so"
 if [[ -f "$SO_PATH" ]]; then
   cp -f "$SO_PATH" "$OUT_DIR/libmdm_android.so"
+  if command -v llvm-strip >/dev/null 2>&1; then
+    llvm-strip --strip-debug "$OUT_DIR/libmdm_android.so" || true
+  fi
   echo "Copied $SO_PATH -> $OUT_DIR/libmdm_android.so"
 fi

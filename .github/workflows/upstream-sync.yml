@@ -1,0 +1,78 @@
+name: Upstream Sync (Stable & Nightly Bug-Fix Channels)
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check Upstream anefzaoui/misterdownloadmanager
+        id: check_upstream
+        run: |
+          OLD_SHA=$(python3 -c 'import json; print(json.load(open("upstream/UPSTREAM_VERSION.json"))["commit"])')
+          OLD_VER=$(python3 -c 'import json; print(json.load(open("upstream/UPSTREAM_VERSION.json"))["version"])')
+          bash scripts/sync-upstream.sh --remote
+          NEW_SHA=$(python3 -c 'import json; print(json.load(open("upstream/UPSTREAM_VERSION.json"))["commit"])')
+          NEW_VER=$(python3 -c 'import json; print(json.load(open("upstream/UPSTREAM_VERSION.json"))["version"])')
+          echo "old_sha=$OLD_SHA" >> "$GITHUB_OUTPUT"
+          echo "new_sha=$NEW_SHA" >> "$GITHUB_OUTPUT"
+          echo "old_ver=$OLD_VER" >> "$GITHUB_OUTPUT"
+          echo "new_ver=$NEW_VER" >> "$GITHUB_OUTPUT"
+          if [[ "$OLD_SHA" != "$NEW_SHA" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up JDK 21
+        if: steps.check_upstream.outputs.changed == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Set up Rust & Build libmdm_android.so
+        if: steps.check_upstream.outputs.changed == 'true'
+        run: |
+          rustup toolchain install nightly --profile minimal
+          rustup default nightly
+          cargo test --manifest-path upstream/Cargo.toml -p mdm-android-ffi
+
+      - name: Build Signed Release APK
+        if: steps.check_upstream.outputs.changed == 'true'
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run Gradle Release Build
+        if: steps.check_upstream.outputs.changed == 'true'
+        run: |
+          gradle -p android :app:testDebugUnitTest :app:assembleRelease
+          cp android/app/build/outputs/apk/release/app-release.apk HyperStream-v${{ steps.check_upstream.outputs.new_ver }}-arm64.apk
+
+      - name: Commit Upstream Sync to main
+        if: steps.check_upstream.outputs.changed == 'true' && steps.check_upstream.outputs.old_sha != steps.check_upstream.outputs.new_sha
+        run: |
+          git config user.name "HyperStream Upstream Sync Bot"
+          git config user.email "actions@github.com"
+          git add upstream/
+          git commit -m "chore(upstream): sync anefzaoui/misterdownloadmanager @ ${{ steps.check_upstream.outputs.new_sha }}"
+          git push origin HEAD:main
+
+      - name: Publish Nightly / Bug-Fix Channel Release
+        if: steps.check_upstream.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete nightly --yes || true
+          gh release create nightly HyperStream-v${{ steps.check_upstream.outputs.new_ver }}-arm64.apk \
+            --title "HyperStream Nightly / Bug-Fix (Upstream ${{ steps.check_upstream.outputs.new_sha }})" \
+            --notes "Automated upstream sync with anefzaoui/misterdownloadmanager commit ${{ steps.check_upstream.outputs.new_sha }} (v${{ steps.check_upstream.outputs.new_ver }})." \
+            --prerelease
