@@ -139,7 +139,7 @@ fun HyperStreamAppContent(
                 UpdateChannel.STABLE
             }
             val result = UpdateChannelManager.checkForUpdates(
-                currentVersion = "0.6.0",
+                currentVersion = com.hyperstream.downloadmanager.BuildConfig.VERSION_NAME,
                 channel = channel
             )
             if (result is UpdateCheckResult.UpdateAvailable) {
@@ -315,53 +315,11 @@ fun HyperStreamAppContent(
                     )
                 }
 
-                // In-App Update Alert Dialog (triggers when new GitHub release is detected)
+                // In-App Update Dialog: downloads, verifies and installs the APK inside HyperStream
                 if (showUpdateDialog && availableUpdate != null) {
-                    val update = availableUpdate!!
-                    AlertDialog(
-                        onDismissRequest = { showUpdateDialog = false },
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Default.CloudDownload,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        },
-                        title = {
-                            Text(
-                                text = "🚀 Update Available: ${update.releaseName}",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        },
-                        text = {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(
-                                    text = "A new version of HyperStream is ready (${update.tagName}).",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                if (update.releaseNotes.isNotBlank()) {
-                                    Text(
-                                        text = update.releaseNotes.take(250) + if (update.releaseNotes.length > 250) "..." else "",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        },
-                        confirmButton = {
-                            Button(onClick = {
-                                showUpdateDialog = false
-                                UpdateChannelManager.startApkDownload(context, update.apkUrl)
-                            }) {
-                                Text("Download APK")
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showUpdateDialog = false }) {
-                                Text("Later")
-                            }
-                        }
+                    com.hyperstream.downloadmanager.ui.screens.UpdateDialog(
+                        update = availableUpdate!!,
+                        onDismiss = { showUpdateDialog = false }
                     )
                 }
             }

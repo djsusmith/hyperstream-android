@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <a href="#-quick-download"><strong>⬇️ Download APK (v0.6.1)</strong></a> •
+  <a href="#-quick-download"><strong>⬇️ Download APK (v0.6.2)</strong></a> •
   <a href="https://djsusmith.github.io/hyperstream-android/"><strong>🌐 Official Website</strong></a> •
   <a href="#-key-features"><strong>✨ Features</strong></a> •
   <a href="#-comparison"><strong>📊 Comparison</strong></a> •
@@ -41,15 +41,15 @@ Engineered specifically for 64-bit Android devices, HyperStream bypasses traditi
 Get the official, production-signed release APK directly from GitHub:
 
 <p align="center">
-  <a href="https://github.com/djsusmith/hyperstream-android/releases/download/v0.6.1/HyperStream-v0.6.1-arm64.apk">
-    <img src="https://img.shields.io/badge/Download-HyperStream%20v0.6.1%20APK-6366F1?style=for-the-badge&logo=android&logoColor=white" height="42" alt="Download APK" />
+  <a href="https://github.com/djsusmith/hyperstream-android/releases/download/v0.6.2/HyperStream-v0.6.2-arm64.apk">
+    <img src="https://img.shields.io/badge/Download-HyperStream%20v0.6.2%20APK-6366F1?style=for-the-badge&logo=android&logoColor=white" height="42" alt="Download APK" />
   </a>
 </p>
 
 | Metric | Specification |
 | :--- | :--- |
 | **Package Name** | `com.hyperstream.downloadmanager` |
-| **Latest Version** | **v0.6.1** (Build 61) |
+| **Latest Version** | **v0.6.2** (Build 62) |
 | **Target Architecture** | `arm64-v8a` (Native Rust + JNI) |
 | **Minimum OS** | Android 9.0 (API 28) or higher |
 | **Release Signing** | 4096-bit RSA (V1, V2, V3, and V4 APK Signing) |
@@ -101,7 +101,7 @@ Get the official, production-signed release APK directly from GitHub:
 
 ## 📊 Comparison Matrix
 
-| Feature | HyperStream (v0.6.1) | 1DM+ / IDM Android | ADM (Advanced DM) | Stock Browsers |
+| Feature | HyperStream (v0.6.2) | 1DM+ / IDM Android | ADM (Advanced DM) | Stock Browsers |
 | :--- | :---: | :---: | :---: | :---: |
 | **Core Engine** | **Native Rust (ARM64)** | Java / C++ | Java | Chromium / WebKit |
 | **Max Connections** | **128 Threads (Dynamic)** | 32 Threads | 16 Threads | 1–4 Threads |
@@ -197,7 +197,7 @@ android/app/build/outputs/apk/release/app-release.apk
 
 HyperStream stays 100% faithful to [Mister Download Manager](https://github.com/anefzaoui/misterdownloadmanager) through automated CI synchronization:
 
-- **Stable Channel (`stable`):** Tracks verified, tagged upstream releases (`v0.5.2`, `v0.6.0`, `v0.6.1`). Recommended for daily high-stability downloading.
+- **Stable Channel (`stable`):** Tracks verified, tagged upstream releases (`v0.5.2`, `v0.6.0`, `v0.6.1`, `v0.6.2`). Recommended for daily high-stability downloading.
 - **Nightly / Bug-Fix Channel (`nightly`):** Automated GitHub Actions (`.github/workflows/upstream-sync.yml`) monitors upstream commits every 6 hours and compiles fresh builds whenever bug fixes land.
 
 You can switch between update channels at any time inside **Settings ➔ Update Channel**.
@@ -206,8 +206,13 @@ You can switch between update channels at any time inside **Settings ➔ Update 
 
 ## 📋 Changelog
 
+### v0.6.2 — 2026-11-18
+- ⬇️ **One-tap in-app updates** — HyperStream now downloads the update itself with a live progress bar, verifies the SHA-256 checksum and package, then launches the installer (tap **Open** afterwards to restart on the new version)
+- 🏷️ **Correct version display** — Settings and the update checker now read the real installed version, so the update prompt disappears after updating
+- 📝 Cleaner release notes in the update dialog
+
 ### v0.6.1 — 2026-11-18
-- 🔄 **1DM-style Link Refresh** — tap Refresh Link on any Failed/Paused download to supply a fresh URL and seamlessly resume from existing byte ranges; no re-downloading of completed chunks
+- 🔄 **Smart Link Refresh** — tap Refresh Link on any Failed/Paused download to supply a fresh URL and seamlessly resume from existing byte ranges; no re-downloading of completed chunks
 - ✅ **Seamless resume from disk state** — `.mdm.part` and `.mdm.json` are detected on restart and the download continues from where it left off
 - 🔁 **AddDownload deduplication** — re-adding a stalled download refreshes the URL in-place instead of creating duplicates
 - 🛠️ **Upstream sync CI fix** — force-stage `libmdm_android.so`, guard empty commits, rebase before push

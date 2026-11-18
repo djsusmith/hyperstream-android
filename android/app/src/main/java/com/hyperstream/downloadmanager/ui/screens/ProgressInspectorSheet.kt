@@ -85,7 +85,7 @@ fun ProgressInspectorSheet(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "Update expired streaming or CDN tokens (YouTube, TikTok, 1DM-style) and seamlessly resume existing chunks.",
+                        text = "Update expired streaming or CDN tokens (YouTube, TikTok, file hosts) and seamlessly resume existing chunks.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

@@ -20,8 +20,8 @@ android {
         applicationId = "com.hyperstream.downloadmanager"
         minSdk = 28
         targetSdk = 35
-        versionCode = 60
-        versionName = "0.6.0"
+        versionCode = 62
+        versionName = "0.6.2"
         ndk {
             abiFilters += listOf("arm64-v8a")
         }

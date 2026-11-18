@@ -22,7 +22,8 @@ data class GithubReleaseDto(
     val apkDownloadUrl: String,
     val releaseNotes: String = "",
     val sizeBytes: Long = 0L,
-    val publishedAt: String = ""
+    val publishedAt: String = "",
+    val sha256: String = ""
 )
 
 sealed class UpdateCheckResult {
@@ -35,7 +36,8 @@ sealed class UpdateCheckResult {
         val apkUrl: String,
         val releaseNotes: String,
         val sizeBytes: Long,
-        val isPrerelease: Boolean
+        val isPrerelease: Boolean,
+        val sha256: String = ""
     ) : UpdateCheckResult()
     data class UpToDate(
         val currentVersion: String,
@@ -48,7 +50,7 @@ sealed class UpdateCheckResult {
 
 object UpdateChannelManager {
     const val GITHUB_RELEASES_API = "https://api.github.com/repos/djsusmith/hyperstream-android/releases"
-    const val DEFAULT_FALLBACK_APK = "https://gh-proxy.com/https://github.com/djsusmith/hyperstream-android/releases/download/v0.6.0/HyperStream-v0.6.0-arm64.apk"
+    const val DEFAULT_FALLBACK_APK = "https://gh-proxy.com/https://github.com/djsusmith/hyperstream-android/releases/download/v0.6.2/HyperStream-v0.6.2-arm64.apk"
 
     /**
      * Resolves nearest high-speed CDN mirror for GitHub releases to bypass slow S3 routing.
@@ -78,7 +80,7 @@ object UpdateChannelManager {
      * based on the selected update channel (Stable vs Nightly/Bug-Fix).
      */
     suspend fun checkForUpdates(
-        currentVersion: String = "0.6.0",
+        currentVersion: String = com.hyperstream.downloadmanager.BuildConfig.VERSION_NAME,
         channel: UpdateChannel = UpdateChannel.STABLE
     ): UpdateCheckResult = withContext(Dispatchers.IO) {
         try {
@@ -87,7 +89,7 @@ object UpdateChannelManager {
                 requestMethod = "GET"
                 connectTimeout = 8000
                 readTimeout = 8000
-                setRequestProperty("User-Agent", "HyperStream-Android-Updater/0.6.0")
+                setRequestProperty("User-Agent", "HyperStream-Android-Updater/$currentVersion")
                 setRequestProperty("Accept", "application/vnd.github.v3+json")
                 instanceFollowRedirects = true
             }
@@ -118,6 +120,7 @@ object UpdateChannelManager {
                 // Find APK asset
                 var apkUrl = ""
                 var apkSize = 0L
+                var apkSha = ""
                 val assets = obj.optJSONArray("assets")
                 if (assets != null) {
                     for (j in 0 until assets.length()) {
@@ -126,6 +129,7 @@ object UpdateChannelManager {
                         if (aName.endsWith(".apk", ignoreCase = true)) {
                             apkUrl = asset.optString("browser_download_url", "")
                             apkSize = asset.optLong("size", 0L)
+                            apkSha = asset.optString("digest", "").takeIf { it.startsWith("sha256:") } ?: ""
                             break
                         }
                     }
@@ -144,7 +148,8 @@ object UpdateChannelManager {
                         apkDownloadUrl = apkUrl,
                         releaseNotes = notes,
                         sizeBytes = apkSize,
-                        publishedAt = published
+                        publishedAt = published,
+                        sha256 = apkSha
                     )
                 )
             }
@@ -167,7 +172,8 @@ object UpdateChannelManager {
                             apkUrl = latestStable.apkDownloadUrl,
                             releaseNotes = latestStable.releaseNotes,
                             sizeBytes = latestStable.sizeBytes,
-                            isPrerelease = false
+                            isPrerelease = false,
+                            sha256 = latestStable.sha256
                         )
                     } else {
                         UpdateCheckResult.UpToDate(currentVersion, currentTimeStr())
@@ -185,7 +191,8 @@ object UpdateChannelManager {
                             apkUrl = latestNightly.apkDownloadUrl,
                             releaseNotes = latestNightly.releaseNotes,
                             sizeBytes = latestNightly.sizeBytes,
-                            isPrerelease = true
+                            isPrerelease = true,
+                            sha256 = latestNightly.sha256
                         )
                     } else {
                         UpdateCheckResult.UpToDate(currentVersion, currentTimeStr())

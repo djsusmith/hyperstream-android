@@ -52,6 +52,13 @@ fun SettingsAndUpdaterScreen(
     val scope = rememberCoroutineScope()
     var shizukuStatusMessage by remember { mutableStateOf<String?>(null) }
     var updateResult by remember { mutableStateOf<UpdateCheckResult>(UpdateCheckResult.Idle) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
+
+    (updateResult as? UpdateCheckResult.UpdateAvailable)?.let { upd ->
+        if (showUpdateDialog) {
+            UpdateDialog(update = upd, onDismiss = { showUpdateDialog = false })
+        }
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -91,7 +98,7 @@ fun SettingsAndUpdaterScreen(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Current Installed Version: v0.6.0\nUpdate Channel determines which releases you receive from GitHub.",
+                        text = "Current Installed Version: v${com.hyperstream.downloadmanager.BuildConfig.VERSION_NAME}\nUpdate Channel determines which releases you receive from GitHub.",
                         style = MaterialTheme.typography.bodySmall
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -129,7 +136,7 @@ fun SettingsAndUpdaterScreen(
                                         UpdateChannel.STABLE
                                     }
                                     updateResult = UpdateChannelManager.checkForUpdates(
-                                        currentVersion = "0.6.0",
+                                        currentVersion = com.hyperstream.downloadmanager.BuildConfig.VERSION_NAME,
                                         channel = channel
                                     )
                                 }
@@ -196,16 +203,15 @@ fun SettingsAndUpdaterScreen(
                                         style = MaterialTheme.typography.bodySmall
                                     )
                                     if (res.releaseNotes.isNotBlank()) {
+                                        val notes = com.hyperstream.downloadmanager.updater.ApkSelfUpdater.plainReleaseNotes(res.releaseNotes)
                                         Text(
-                                            text = res.releaseNotes.take(200) + if (res.releaseNotes.length > 200) "..." else "",
+                                            text = notes.take(300) + if (notes.length > 300) "..." else "",
                                             style = MaterialTheme.typography.bodySmall
                                         )
                                     }
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Button(onClick = {
-                                            UpdateChannelManager.startApkDownload(context, res.apkUrl)
-                                        }) {
-                                            Text("Download APK")
+                                        Button(onClick = { showUpdateDialog = true }) {
+                                            Text("Update now")
                                         }
                                         if (s.shizukuEnabled) {
                                             OutlinedButton(onClick = {

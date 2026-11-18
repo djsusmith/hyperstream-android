@@ -22,7 +22,7 @@ object MetaPixelTracker {
     private const val PIXEL_ENDPOINT = "https://www.facebook.com/tr/"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val appVersion = "0.6.0"
+    private val appVersion = com.hyperstream.downloadmanager.BuildConfig.VERSION_NAME
 
     /**
      * Track standard or custom Meta conversion event.
