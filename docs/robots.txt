@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://djsusmith.github.io/hyperstream-android/sitemap.xml

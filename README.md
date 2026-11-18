@@ -45,6 +45,9 @@ Get the official, production-signed release APK directly from GitHub:
   <a href="https://github.com/djsusmith/hyperstream-android/releases/download/v0.6.3/HyperStream-v0.6.3-arm64.apk">
     <img src="https://img.shields.io/badge/Download-HyperStream%20v0.6.3%20APK-6366F1?style=for-the-badge&logo=android&logoColor=white" height="42" alt="Download APK" />
   </a>
+  <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/djsusmith/hyperstream-android">
+    <img src="https://img.shields.io/badge/Obtainium-1--Tap%20Track%20%26%20Update-10B981?style=for-the-badge&logo=android&logoColor=white" height="42" alt="Add to Obtainium" />
+  </a>
 </p>
 
 | Metric | Specification |
