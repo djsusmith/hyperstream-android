@@ -187,7 +187,7 @@ fun HyperStreamAppContent(
                         Column {
                             Text("HyperStream", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
                             Text(
-                                text = "128-Thread Engine • Ahnaf Hasan Susmith",
+                                text = "128-Thread Download Manager",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -272,12 +272,6 @@ fun HyperStreamAppContent(
                                     )
                                 }
                             }
-                        }
-                        IconButton(onClick = { selectedTab = 5 }) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = "Credits & About"
-                            )
                         }
                     }
                 )
