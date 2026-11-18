@@ -1,0 +1,11 @@
+/home/runner/work/hyperstream-android/hyperstream-android/upstream/target/aarch64-linux-android/release/build/inout/6a0fa98816628aeb/out/inout-6a0fa98816628aeb.d: /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inout-0.2.5/src/lib.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inout-0.2.5/src/errors.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inout-0.2.5/src/inout.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inout-0.2.5/src/inout_buf.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inout-0.2.5/src/reserved.rs
+
+/home/runner/work/hyperstream-android/hyperstream-android/upstream/target/aarch64-linux-android/release/build/inout/6a0fa98816628aeb/out/libinout-6a0fa98816628aeb.rlib: /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inout-0.2.5/src/lib.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inout-0.2.5/src/errors.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inout-0.2.5/src/inout.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inout-0.2.5/src/inout_buf.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inout-0.2.5/src/reserved.rs
+
+/home/runner/work/hyperstream-android/hyperstream-android/upstream/target/aarch64-linux-android/release/build/inout/6a0fa98816628aeb/out/libinout-6a0fa98816628aeb.rmeta: /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inout-0.2.5/src/lib.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inout-0.2.5/src/errors.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inout-0.2.5/src/inout.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inout-0.2.5/src/inout_buf.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inout-0.2.5/src/reserved.rs
+
+/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inout-0.2.5/src/lib.rs:
+/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inout-0.2.5/src/errors.rs:
+/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inout-0.2.5/src/inout.rs:
+/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inout-0.2.5/src/inout_buf.rs:
+/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inout-0.2.5/src/reserved.rs:

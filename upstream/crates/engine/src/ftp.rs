@@ -476,34 +476,29 @@ fn connector(extra: &[Vec<u8>]) -> Result<tokio_rustls::TlsConnector, Error> {
 /// setting that holds it may still use plain DNS, and FTP stays plain FTP.
 pub(crate) fn client_config(extra: &[Vec<u8>]) -> Result<rustls::ClientConfig, rustls::Error> {
     use rustls_platform_verifier::Verifier;
-    let _ = CertificateDer::from(Vec::new());
     if extra.is_empty() && !crate::tls::system_has_roots() {
         return Ok(crate::tls::no_roots_config());
     }
     let provider = crate::tls::provider();
     #[cfg(not(target_os = "android"))]
-    let verifier_res = if extra.is_empty() {
+    let verifier = if extra.is_empty() {
         Verifier::new(provider.clone())
     } else {
         Verifier::new_with_extra_roots(
             extra.iter().map(|c| CertificateDer::from(c.clone())),
             provider.clone(),
         )
-    };
+    }?;
     #[cfg(target_os = "android")]
-    let verifier_res: Result<Verifier, rustls::Error> = if extra.is_empty() {
-        Verifier::new(provider.clone())
-    } else {
-        Err(rustls::Error::General("use fallback roots with extra CAs on android".into()))
+    let verifier = {
+        let _ = extra;
+        Verifier::new(provider.clone())?
     };
-    match verifier_res {
-        Ok(verifier) => Ok(rustls::ClientConfig::builder_with_provider(provider)
-            .with_safe_default_protocol_versions()?
-            .dangerous()
-            .with_custom_certificate_verifier(Arc::new(verifier))
-            .with_no_client_auth()),
-        Err(_) => Ok(crate::tls::fallback_roots_config(extra)),
-    }
+    Ok(rustls::ClientConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()?
+        .dangerous()
+        .with_custom_certificate_verifier(Arc::new(verifier))
+        .with_no_client_auth())
 }
 
 /// The login an `Authorization: Basic` header carries.

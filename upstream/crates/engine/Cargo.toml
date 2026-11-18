@@ -12,13 +12,13 @@ publish.workspace = true
 default = ["browser-connection"]
 # The browser-like connection for sites whose bot check refuses MDM's own (#668,
 # src/browserlike.rs). Without it a bot check's refusal stands (the browser takes the download).
-browser-connection = ["dep:wreq", "dep:wreq-util"]
+browser-connection = ["dep:wreq", "dep:wreq-util", "dep:rustls-native-certs", "dep:webpki-root-certs"]
 
 [dependencies]
 wreq = { workspace = true, optional = true }
 wreq-util = { workspace = true, optional = true }
-rustls-native-certs.workspace = true
-webpki-root-certs.workspace = true
+rustls-native-certs = { workspace = true, optional = true }
+webpki-root-certs = { workspace = true, optional = true }
 bytes.workspace = true
 craft-atomic.workspace = true
 serde_json.workspace = true
@@ -65,9 +65,6 @@ windows-sys.workspace = true
 [target.'cfg(all(windows, target_arch = "x86"))'.dependencies]
 rquickjs = { version = "0.14.0", default-features = false, features = ["std", "bindgen"] }
 
-[target.'cfg(target_os = "android")'.dependencies]
-rquickjs = { version = "0.14.0", default-features = false, features = ["std", "bindgen"] }
-
 [target.'cfg(unix)'.dependencies]
 # The free-space probe (src/disk.rs): statvfs and statfs, safely (already in the tree).
 rustix = { version = "1.1.6", features = ["fs"] }
@@ -93,3 +90,6 @@ tokio = { workspace = true, features = ["test-util"] }
 
 [lints]
 workspace = true
+
+[target.'cfg(target_os = "android")'.dependencies]
+rquickjs = { version = "0.14.0", default-features = false, features = ["std", "bindgen"] }

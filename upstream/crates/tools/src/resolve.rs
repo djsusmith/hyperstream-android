@@ -26,6 +26,11 @@ pub struct Video {
     /// yt-dlp said it had no JavaScript runtime for the site's qualities (#852,
     /// [`proc::missing_js_runtime`]): YouTube's list is short without one.
     pub needs_js_runtime: bool,
+    /// yt-dlp had no reader for the site (its `extractor_key` is `Generic`, or `HTML5MediaEmbed`
+    /// for a page's plain `<video>`), or the title is the one the page declares (#1076): it is
+    /// the page's own, the frame's for a player embedded in another site's page (#1351), not one
+    /// a site's reader knows the video by.
+    pub page_titled: bool,
 }
 
 impl Video {
@@ -125,6 +130,7 @@ struct RawVideo {
     /// `null` from some extractors (Wikimedia Commons'): not a plain file.
     #[serde(default)]
     direct: Option<bool>,
+    extractor_key: Option<String>,
 }
 
 /// One file of a subtitle language (its formats: srt, vtt, json3…); only the name is read.
@@ -300,6 +306,15 @@ fn retype(f: &mut serde_json::Value) -> bool {
     }
 }
 
+/// yt-dlp's readers that know a video only from the page it is on, so its title is the page's
+/// own: the generic one, and the one for a page's plain `<video>`/`<audio>` (`HTML5MediaEmbed`,
+/// #1351: a player in a frame as often as not).
+fn page_reader(extractor_key: &str) -> bool {
+    ["Generic", "HTML5MediaEmbed"]
+        .iter()
+        .any(|k| extractor_key.eq_ignore_ascii_case(k))
+}
+
 /// Parse `yt-dlp -J` output.
 pub fn parse(json: &[u8]) -> Option<Video> {
     let raw: RawVideo = serde_json::from_slice(json).ok()?;
@@ -351,6 +366,7 @@ pub fn parse(json: &[u8]) -> Option<Video> {
         language: raw.language,
         direct: raw.direct == Some(true),
         needs_js_runtime: false,
+        page_titled: raw.extractor_key.as_deref().is_some_and(page_reader),
     })
 }
 
@@ -479,7 +495,7 @@ pub fn look_up_kept(
         message: "it gave no video information".into(),
     })?;
     if let Looked::Video(v) = &mut looked {
-        v.needs_js_runtime = proc::missing_js_runtime(&out.warnings, proc::js_runtime_here());
+        v.needs_js_runtime = proc::missing_js_runtime(&out.warnings, proc::js_runtime_here(exe));
     }
     Ok((looked, out))
 }
@@ -1053,6 +1069,49 @@ pub fn choices(v: &Video, can_merge: bool) -> Vec<Choice> {
     out
 }
 
+/// The choice [`pick`] made among a video's [`choices`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Picked<'a> {
+    /// Its place in the list, and the choice.
+    pub index: usize,
+    pub choice: &'a Choice,
+    /// The height asked for, when the page doesn't offer it and this is the nearest (#1240).
+    pub instead_of: Option<u32>,
+}
+
+/// The choice to download among `choices` (best first, as [`choices`] makes them): without a
+/// height, the first, the one Download video starts on; with one, the best line of that height,
+/// else of the nearest height below it, else of the nearest above (a page whose every video is
+/// bigger), as the download falls back to the nearest quality below once it runs (#94). The
+/// window and the command line choose with it (#1240). None when nothing is listed, or a height is
+/// asked of a page with no video of a known height.
+pub fn pick(choices: &[Choice], height: Option<u32>) -> Option<Picked<'_>> {
+    let Some(want) = height else {
+        return choices.first().map(|choice| Picked {
+            index: 0,
+            choice,
+            instead_of: None,
+        });
+    };
+    let videos = || {
+        choices
+            .iter()
+            .enumerate()
+            .filter_map(|(i, c)| Some((i, c, c.height?)))
+    };
+    // The videos come highest first: the first at or below the height is the nearest below,
+    // the last above it the nearest above.
+    let (index, choice, got) = videos().find(|(_, _, h)| *h <= want).or_else(|| {
+        let lowest = videos().map(|(_, _, h)| h).min()?;
+        videos().find(|(_, _, h)| *h == lowest)
+    })?;
+    Some(Picked {
+        index,
+        choice,
+        instead_of: (got != want).then_some(want),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -1299,6 +1358,7 @@ mod tests {
             language: None,
             direct: false,
             needs_js_runtime: false,
+            page_titled: false,
         };
         let labels: Vec<String> = choices(&v, true)
             .into_iter()
@@ -1698,5 +1758,75 @@ mod tests {
     #[test]
     fn junk_is_not_a_video() {
         assert!(parse(b"not json").is_none());
+    }
+
+    /// A page like Bilibili's: every picture and every sound its own format, none with both,
+    /// each height in several codecs (#1240: `video-get` asked for `b`, a file with both, and
+    /// yt-dlp said "Requested format is not available").
+    const BILIBILI: &str = r#"{"title": "A video", "duration": 300, "formats": [
+        {"format_id": "30280", "ext": "m4a", "vcodec": "none", "acodec": "mp4a.40.2", "tbr": 320, "filesize": 12000000},
+        {"format_id": "30232", "ext": "m4a", "vcodec": "none", "acodec": "mp4a.40.2", "tbr": 128, "filesize": 4800000},
+        {"format_id": "30216", "ext": "m4a", "vcodec": "none", "acodec": "mp4a.40.2", "tbr": 64, "filesize": 2400000},
+        {"format_id": "100026", "ext": "mp4", "height": 1080, "fps": 30, "vcodec": "av01.0.08M.08", "acodec": "none", "filesize": 60000000},
+        {"format_id": "30077", "ext": "mp4", "height": 1080, "fps": 30, "vcodec": "hev1.1.6.L150.90", "acodec": "none", "filesize": 70000000},
+        {"format_id": "30080", "ext": "mp4", "height": 1080, "fps": 30, "vcodec": "avc1.640032", "acodec": "none", "filesize": 90000000},
+        {"format_id": "30064", "ext": "mp4", "height": 720, "fps": 30, "vcodec": "avc1.640028", "acodec": "none", "filesize": 50000000},
+        {"format_id": "30032", "ext": "mp4", "height": 480, "fps": 30, "vcodec": "avc1.64001F", "acodec": "none", "filesize": 25000000},
+        {"format_id": "30016", "ext": "mp4", "height": 360, "fps": 30, "vcodec": "avc1.64001E", "acodec": "none", "filesize": 15000000}]}"#;
+
+    /// #1240: with nothing asked, the window's first choice: the best picture merged with the
+    /// best sound, never a file with both that the page doesn't have.
+    #[test]
+    fn the_best_of_separate_pictures_and_sounds() {
+        let v = parse(BILIBILI.as_bytes()).unwrap();
+        let c = choices(&v, true);
+        let p = pick(&c, None).unwrap();
+        assert_eq!((p.index, p.instead_of), (0, None));
+        assert_eq!(p.choice.height, Some(1080));
+        assert_eq!(p.choice.codec.as_deref(), Some("AV1"));
+        assert_eq!(
+            p.choice.selector,
+            "100026+30280/bv*[height=1080]+ba/b[height=1080]"
+        );
+        assert_eq!(p.choice.ext, "mp4");
+        assert_eq!(p.choice.size, Some(60_000_000 + 12_000_000));
+        // A height it has: its best line.
+        let p = pick(&c, Some(720)).unwrap();
+        assert_eq!(p.instead_of, None);
+        assert_eq!(
+            p.choice.selector,
+            "30064+30280/bv*[height=720]+ba/b[height=720]"
+        );
+    }
+
+    /// #1240: a height the page doesn't offer: the nearest below it, said; below every one, the
+    /// nearest above.
+    #[test]
+    fn a_height_not_offered_takes_the_nearest_below() {
+        let v = parse(BILIBILI.as_bytes()).unwrap();
+        let c = choices(&v, true);
+        let p = pick(&c, Some(4320)).unwrap();
+        assert_eq!(p.instead_of, Some(4320));
+        assert_eq!((p.index, p.choice.height), (0, Some(1080)));
+        assert_eq!(p.choice.codec.as_deref(), Some("AV1"));
+        let p = pick(&c, Some(600)).unwrap();
+        assert_eq!((p.choice.height, p.instead_of), (Some(480), Some(600)));
+        assert!(p.choice.selector.starts_with("30032+30280/"));
+        let p = pick(&c, Some(144)).unwrap();
+        assert_eq!((p.choice.height, p.instead_of), (Some(360), Some(144)));
+        // Nothing listed: nothing picked.
+        assert_eq!(pick(&[], None), None);
+        assert_eq!(pick(&[], Some(720)), None);
+    }
+
+    /// #1240: without ffmpeg such a page has no video to give with its sound: only the sound
+    /// is listed, and a height finds nothing.
+    #[test]
+    fn separate_pictures_need_ffmpeg() {
+        let v = parse(BILIBILI.as_bytes()).unwrap();
+        assert!(needs_merging(&v));
+        let c = choices(&v, false);
+        assert!(is_audio(pick(&c, None).unwrap().choice));
+        assert_eq!(pick(&c, Some(1080)), None);
     }
 }

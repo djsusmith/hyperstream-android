@@ -111,6 +111,30 @@ fn volume_names() {
     assert_eq!(base_name(Path::new("movie.part1.rar")), "movie");
 }
 
+/// A name whose lowercase is longer in bytes than the name itself (`İ` to `i̇`): the base is
+/// cut by the suffix's length, not at an offset measured in the lowercase.
+#[test]
+fn a_volume_name_whose_lowercase_is_longer() {
+    let five = "İ".repeat(5);
+    assert_eq!(
+        volume_key(&format!("{five}.rar")).map(|v| v.base),
+        Some(five.clone())
+    );
+    assert_eq!(
+        volume_key(&format!("{five}.r00")).map(|v| v.base),
+        Some(five.clone())
+    );
+    assert_eq!(
+        volume_key(&format!("{five}.7z.001")).map(|v| v.base),
+        Some(five.clone())
+    );
+    assert_eq!(
+        volume_key(&format!("{five}.part2.rar")).map(|v| v.base),
+        Some(five)
+    );
+    assert_eq!(volume_key("İ.rar").map(|v| v.base), Some("İ".to_owned()));
+}
+
 #[test]
 fn zip_smart_folder_and_marks() {
     let t = tempfile::tempdir().unwrap();
@@ -303,6 +327,23 @@ fn sevenz_plain_encrypted_and_split_through_7zip() {
         Err(Error::WrongPassword)
     ));
     run(&enc, &dest, Some("s3cret"), Subfolder::Smart)
+        .0
+        .unwrap();
+    no_staging(&dest);
+    // Its names encrypted too (`-mhe`): 7-Zip asks before it can list it; the password, given
+    // on its input, opens it.
+    let hidden = t.path().join("hidden.7z");
+    seven_of(&tool, &src, &hidden, &["-ps3cret", "-mhe=on"]);
+    let dest = t.path().join("o3");
+    assert!(matches!(
+        run(&hidden, &dest, None, Subfolder::Smart).0,
+        Err(Error::NeedsPassword)
+    ));
+    assert!(matches!(
+        run(&hidden, &dest, Some("bad"), Subfolder::Smart).0,
+        Err(Error::WrongPassword)
+    ));
+    run(&hidden, &dest, Some("s3cret"), Subfolder::Smart)
         .0
         .unwrap();
     no_staging(&dest);

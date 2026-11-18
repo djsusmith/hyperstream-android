@@ -642,7 +642,8 @@ enum Attempt {
 }
 
 /// End yt-dlp and everything it started (#79): whenever the download is given up, nothing may
-/// go on downloading unseen (Windows: its job, the launcher's child and ffmpeg with it).
+/// go on downloading unseen (its job on Windows, its process group on Linux and macOS, #1301:
+/// the launcher's child and ffmpeg with it).
 fn end(child: &Child) {
     let mut slot = child.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(mut s) = slot.take() {
@@ -1474,7 +1475,12 @@ fn attempt(
     // MDM's engine downloads the streams (#769); yt-dlp then finds them in place.
     let mut by_engine = false;
     if let Some(e) = engine {
-        match e.fetch(exe, url, browser, &file, progress, dead, reroute, cookies) {
+        // With the run's selector: the nearest quality once the chosen one wasn't offered
+        // (#94), or the engine would ask for that one again (#1240).
+        let selector = selector_of(ours);
+        match e.fetch(
+            exe, url, browser, selector, &file, progress, dead, reroute, cookies,
+        ) {
             Engined::Ready => by_engine = true,
             Engined::Helper(why) => {
                 note(
@@ -1686,20 +1692,26 @@ impl ByEngine {
     /// Choose the formats on the page looked up into `file` and download their streams with the
     /// engine; a stream's address that dies is asked for again with a new look-up (`url`, as
     /// the browser asked, `browser`; servers moved as this run moved them; with the browser's
-    /// cookies or without them, as `cookies` decided).
+    /// cookies or without them, as `cookies` decided). `selector`: the run's own format
+    /// selector, when the download moved to another (the nearest quality, #94).
     #[allow(clippy::too_many_arguments)]
     fn fetch(
         &self,
         exe: &Path,
         url: &str,
         browser: &[String],
+        selector: Option<&str>,
         file: &Path,
         progress: &Mutex<Progress>,
         dead: &std::collections::BTreeSet<String>,
         reroute: bool,
         cookies: &Cookies,
     ) -> Engined {
-        let choose_args = cookies.args(&self.choose);
+        let args = match selector {
+            Some(s) => with_selector(&self.choose, s),
+            None => self.choose.clone(),
+        };
+        let choose_args = cookies.args(&args);
         let chosen = match choose(exe, &choose_args, file) {
             Ok(c) => c,
             Err(e) => return Engined::Failed(e),
@@ -2040,7 +2052,7 @@ impl VideoJob {
         // Whose cookies yt-dlp has, for the log (#229): the browser's name only, never a
         // cookie or the profile (a folder may name the person).
         let events = match proc::browser_cookies() {
-            Some(b) if cookies.is_none() => vec![(
+            Some(b) if !browser.private && cookies.is_none() => vec![(
                 std::time::SystemTime::now(),
                 format!(
                     "Cookies read from {} on this computer (Options → Sites Logins)",

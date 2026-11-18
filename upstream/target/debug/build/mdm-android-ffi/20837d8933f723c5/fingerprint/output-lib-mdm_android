@@ -1,0 +1,1 @@
+{"$message_type":"unused_extern","lint_level":"force-warn","unused_extern_names":["crc32fast","md5","mdm_cnl","mdm_debrid","mdm_ipc","mdm_remote","sha1","sha2"]}
