@@ -1223,11 +1223,11 @@
     async function loadDownloadCounter() {
       const el = document.getElementById('totalDownloadsCount');
       if (!el) return;
-      const cacheKey = 'hs_dl_count_v1';
+      const cacheKey = 'hs_dl_count_v2';
       try {
         const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
-        if (cached && (Date.now() - cached.ts) < 5 * 60 * 1000 && typeof cached.count === 'number') {
-          el.textContent = cached.count.toLocaleString() + '+';
+        if (cached && (Date.now() - cached.ts) < 30 * 1000 && typeof cached.count === 'number') {
+          el.textContent = cached.count.toLocaleString();
           return;
         }
       } catch (_) {}
@@ -1244,7 +1244,7 @@
             }
           }
         }
-        el.textContent = total.toLocaleString() + '+';
+        el.textContent = total.toLocaleString();
         try {
           localStorage.setItem(cacheKey, JSON.stringify({ count: total, ts: Date.now() }));
         } catch (_) {}
