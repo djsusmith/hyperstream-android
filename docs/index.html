@@ -1223,7 +1223,7 @@
     async function loadDownloadCounter() {
       const el = document.getElementById('totalDownloadsCount');
       if (!el) return;
-      const cacheKey = 'hs_dl_count_v2';
+      const cacheKey = 'hs_dl_count_v3';
       try {
         const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
         if (cached && (Date.now() - cached.ts) < 30 * 1000 && typeof cached.count === 'number') {
@@ -1232,25 +1232,38 @@
         }
       } catch (_) {}
 
+      let metaBase = 121;
+      let ghBase = 6;
+      try {
+        const statsRes = await fetch('./stats.json?t=' + Math.floor(Date.now() / 60000));
+        if (statsRes.ok) {
+          const stats = await statsRes.json();
+          if (typeof stats.meta_leads === 'number') metaBase = stats.meta_leads;
+          if (typeof stats.github_baseline === 'number') ghBase = stats.github_baseline;
+        }
+      } catch (_) {}
+
+      let total = metaBase;
       try {
         const res = await fetch('https://api.github.com/repos/djsusmith/hyperstream-android/releases?per_page=100');
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const releases = await res.json();
-        let total = 0;
-        for (const rel of releases) {
-          if (Array.isArray(rel.assets)) {
-            for (const asset of rel.assets) {
-              total += Number(asset.download_count || 0);
+        if (res.ok) {
+          const releases = await res.json();
+          let ghTotal = 0;
+          for (const rel of releases) {
+            if (Array.isArray(rel.assets)) {
+              for (const asset of rel.assets) {
+                ghTotal += Number(asset.download_count || 0);
+              }
             }
           }
+          total = metaBase + Math.max(0, ghTotal - ghBase);
         }
-        el.textContent = total.toLocaleString();
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify({ count: total, ts: Date.now() }));
-        } catch (_) {}
-      } catch (_) {
-        el.textContent = 'GitHub';
-      }
+      } catch (_) {}
+
+      el.textContent = total.toLocaleString();
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify({ count: total, ts: Date.now() }));
+      } catch (_) {}
     }
 
     loadDownloadCounter();
