@@ -8,7 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 enum class MdmThemeStyle(val id: String, val title: String) {
-    OBSIDIAN_FLAGSHIP("obsidian", "Flagship Obsidian & Indigo (Website Style)"),
+    OBSIDIAN_FLAGSHIP("obsidian", "HyperStream Royal & Obsidian"),
     CLASSIC_IDM("classic", "Classic MDM / IDM Cobalt"),
     METRO_DARK("metro", "Metro Midnight OLED"),
     MATERIAL_DYNAMIC("material", "Material 3 HyperStream Emerald");
@@ -19,6 +19,26 @@ enum class MdmThemeStyle(val id: String, val title: String) {
         }
     }
 }
+
+private val RoyalLightScheme = lightColorScheme(
+    primary = Color(0xFF3355FF),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFE8EEFF),
+    onPrimaryContainer = Color(0xFF10247A),
+    secondary = Color(0xFF10B981),
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFD1FAE5),
+    onSecondaryContainer = Color(0xFF065F46),
+    tertiary = Color(0xFFF59E0B),
+    background = Color(0xFFF4F6FA),
+    onBackground = Color(0xFF0F172A),
+    surface = Color(0xFFFFFFFF),
+    onSurface = Color(0xFF0F172A),
+    surfaceVariant = Color(0xFFEEF2F8),
+    onSurfaceVariant = Color(0xFF64748B),
+    outline = Color(0xFFCBD5E1),
+    outlineVariant = Color(0xFFE2E8F0)
+)
 
 private val ObsidianFlagshipScheme = darkColorScheme(
     primary = Color(0xFF818CF8), // Radiant Indigo
@@ -95,13 +115,10 @@ fun HyperStreamTheme(
     val useDark = when (darkModePref.lowercase()) {
         "light" -> false
         "dark" -> true
-        else -> when (style) {
-            MdmThemeStyle.OBSIDIAN_FLAGSHIP, MdmThemeStyle.METRO_DARK -> true
-            else -> isSystemInDarkTheme()
-        }
+        else -> isSystemInDarkTheme()
     }
-    val colors = if (!useDark && style != MdmThemeStyle.OBSIDIAN_FLAGSHIP) {
-        ClassicLightScheme
+    val colors = if (!useDark) {
+        if (style == MdmThemeStyle.OBSIDIAN_FLAGSHIP) RoyalLightScheme else ClassicLightScheme
     } else {
         when (style) {
             MdmThemeStyle.OBSIDIAN_FLAGSHIP -> ObsidianFlagshipScheme

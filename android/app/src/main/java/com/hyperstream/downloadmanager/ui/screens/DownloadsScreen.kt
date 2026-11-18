@@ -1,8 +1,12 @@
 package com.hyperstream.downloadmanager.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,53 +20,57 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.hyperstream.downloadmanager.a2ui.A2uiSurfaceRenderer
+import com.hyperstream.downloadmanager.a2ui.HyperStreamA2uiCatalog
 import com.hyperstream.downloadmanager.browser.LinkParser
 import com.hyperstream.downloadmanager.core.DownloadItemUi
 import com.hyperstream.downloadmanager.core.MdmUiState
-import com.hyperstream.downloadmanager.ui.components.SegmentMapBar
 import com.hyperstream.downloadmanager.util.FileOpener
 
 @Composable
@@ -76,15 +84,41 @@ fun DownloadsScreen(
     onRefreshLink: (Long, String) -> Unit = { _, _ -> },
     onCancelDownload: (Long, Boolean) -> Unit = { _, _ -> },
     onInspectDownload: (DownloadItemUi) -> Unit,
+    showSearchBar: Boolean = false,
+    searchQuery: String = "",
+    onSearchQueryChange: (String) -> Unit = {},
+    onOpenNewDownloadSheet: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var showAddPanel by remember { mutableStateOf(false) }
-    var newUrl by remember { mutableStateOf("") }
-    var newChecksum by remember { mutableStateOf("") }
-    var newConnections by remember { mutableFloatStateOf(state.settings.maxConnections.toFloat()) }
+    var showFallbackAddSheet by remember { mutableStateOf(false) }
     var itemPendingDelete by remember { mutableStateOf<DownloadItemUi?>(null) }
     var alsoDeleteFromStorage by remember { mutableStateOf(true) }
+
+    // A2UI Hero Surface interactive state
+    var heroCollapsed by remember { mutableStateOf(false) }
+    var showConnectionMap by remember { mutableStateOf(false) }
+    var peakSpeedBps by remember { mutableLongStateOf(0L) }
+    val speedHistory = remember { mutableStateListOf<Long>() }
+
+    LaunchedEffect(state.totalDownSpeedBps) {
+        if (state.totalDownSpeedBps > peakSpeedBps) {
+            peakSpeedBps = state.totalDownSpeedBps
+        }
+        speedHistory.add(state.totalDownSpeedBps)
+        if (speedHistory.size > 24) {
+            speedHistory.removeAt(0)
+        }
+    }
+
+    if (showFallbackAddSheet) {
+        NewDownloadSheet(
+            defaultConnections = state.settings.maxConnections,
+            defaultCategory = selectedCategory,
+            onDismiss = { showFallbackAddSheet = false },
+            onStartDownload = onAddDownload
+        )
+    }
 
     // Permanent Deletion Confirmation Dialog
     itemPendingDelete?.let { targetItem ->
@@ -141,158 +175,138 @@ fun DownloadsScreen(
         )
     }
 
-    val filteredDownloads = remember(state.downloads, selectedCategory) {
-        when (selectedCategory) {
+    val activeDownloads = remember(state.downloads) {
+        state.downloads.filter { it.status == "Downloading" || it.status == "Probing" }
+    }
+    val completedDownloads = remember(state.downloads) {
+        state.downloads.filter { it.status == "Completed" }
+    }
+    val queuedOrPausedDownloads = remember(state.downloads) {
+        state.downloads.filter { it.status == "Paused" || it.status == "Queued" || it.status == "Failed" }
+    }
+
+    val filteredDownloads = remember(state.downloads, selectedCategory, searchQuery) {
+        val byCat = when (selectedCategory) {
             "All" -> state.downloads
-            "Unfinished" -> state.downloads.filter { it.status != "Completed" }
-            "Finished" -> state.downloads.filter { it.status == "Completed" }
+            "Downloading" -> state.downloads.filter { it.status == "Downloading" || it.status == "Probing" }
+            "Completed", "Finished" -> state.downloads.filter { it.status == "Completed" }
+            "Queued", "Unfinished" -> state.downloads.filter { it.status != "Completed" }
             else -> state.downloads.filter { it.category.equals(selectedCategory, ignoreCase = true) }
         }
+        val q = searchQuery.trim()
+        if (q.isEmpty()) byCat
+        else byCat.filter { it.name.contains(q, ignoreCase = true) || it.url.contains(q, ignoreCase = true) }
+    }
+
+    val heroSurface = remember(
+        state.totalDownSpeedBps,
+        peakSpeedBps,
+        activeDownloads.size,
+        queuedOrPausedDownloads.size,
+        completedDownloads.size,
+        state.activeThreadsTotal,
+        heroCollapsed,
+        showConnectionMap,
+        speedHistory.size
+    ) {
+        HyperStreamA2uiCatalog.buildDownloadsHeroSurface(
+            speedBps = state.totalDownSpeedBps,
+            peakBps = peakSpeedBps,
+            activeCount = activeDownloads.size,
+            queuedCount = queuedOrPausedDownloads.size,
+            doneCount = completedDownloads.size,
+            activeThreads = state.activeThreadsTotal,
+            collapsed = heroCollapsed,
+            showConnectionMap = showConnectionMap,
+            speedHistory = speedHistory.toList()
+        )
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        // Top Telemetry Banner (Speed, Active 128 Threads, WakeLock badge, Free Disk)
-        Card(
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 8.dp)
-        ) {
-            Row(
+        // Optional inline search bar (toggled from top bar search icon)
+        AnimatedVisibility(visible = showSearchBar) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
+                placeholder = { Text("Search downloads by name or URL...") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { onSearchQueryChange("") }) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear")
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Icon(
-                        Icons.Default.Speed,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(
-                            text = formatSpeed(state.totalDownSpeedBps) + " ↓  •  " + formatSpeed(state.totalUpSpeedBps) + " ↑",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "${state.activeThreadsTotal} Active Threads (Max 128) • Free ${formatBytes(state.freeDiskBytes)}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
+            )
+        }
+
+        // PDM Speedometer Hero Card rendered via A2UI Surface Renderer
+        A2uiSurfaceRenderer(
+            surface = heroSurface,
+            onAction = { action ->
+                when (action.name) {
+                    "toggle_collapse" -> heroCollapsed = !heroCollapsed
+                    "toggle_dial_mode" -> showConnectionMap = !showConnectionMap
+                    "pause_all" -> activeDownloads.forEach { onTogglePauseResume(it.id) }
+                    "resume_all" -> state.downloads
+                        .filter { it.status == "Paused" || it.status == "Queued" }
+                        .forEach { onTogglePauseResume(it.id) }
                 }
+            }
+        )
+
+        // PDM-style Filter Pills with live counts
+        val filterPills = remember(state.downloads.size, activeDownloads.size, completedDownloads.size, queuedOrPausedDownloads.size) {
+            listOf(
+                "All" to state.downloads.size,
+                "Downloading" to activeDownloads.size,
+                "Completed" to completedDownloads.size,
+                "Queued" to queuedOrPausedDownloads.size,
+                "Video" to state.downloads.count { it.category.equals("Video", ignoreCase = true) },
+                "Music" to state.downloads.count { it.category.equals("Music", ignoreCase = true) },
+                "Compressed" to state.downloads.count { it.category.equals("Compressed", ignoreCase = true) },
+                "Documents" to state.downloads.count { it.category.equals("Documents", ignoreCase = true) },
+                "Programs" to state.downloads.count { it.category.equals("Programs", ignoreCase = true) }
+            )
+        }
+
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(filterPills) { (label, count) ->
+                val selected = selectedCategory == label
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (state.wakeLockActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(
-                        1.dp,
-                        if (state.wakeLockActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f) else MaterialTheme.colorScheme.outlineVariant
-                    ),
-                    modifier = Modifier.clickable { showAddPanel = !showAddPanel }
+                    shape = RoundedCornerShape(999.dp),
+                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                    border = if (selected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    shadowElevation = if (selected) 2.dp else 0.dp,
+                    modifier = Modifier.clickable { onSelectCategory(label) }
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(
-                            Icons.Default.Bolt,
-                            contentDescription = null,
-                            tint = if (state.wakeLockActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                            modifier = Modifier.size(18.dp)
+                        Text(
+                            text = label,
+                            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                            fontSize = 13.sp
                         )
-                        Column {
+                        if (count > 0 || label == "All") {
                             Text(
-                                text = "WakeLock",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (state.wakeLockActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                text = count.toString(),
+                                color = if (selected) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
                             )
-                            Text(
-                                text = if (state.wakeLockActive) "ON" else "IDLE",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = if (state.wakeLockActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Category Filter Rail
-        val categories = listOf("All", "Unfinished", "Finished", "Video", "Music", "Compressed", "Documents", "Programs")
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(categories) { cat ->
-                FilterChip(
-                    selected = selectedCategory == cat,
-                    onClick = { onSelectCategory(cat) },
-                    label = { Text(cat) }
-                )
-            }
-            item {
-                Button(onClick = { showAddPanel = !showAddPanel }) {
-                    Icon(Icons.Default.Add, contentDescription = null)
-                    Text(" Add URL (128T)")
-                }
-            }
-        }
-
-        if (showAddPanel) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Add Multi-Connection Download (HTTP/HTTPS/FTP/FTPS/GDrive/MediaFire)", fontWeight = FontWeight.Bold)
-                    OutlinedTextField(
-                        value = newUrl,
-                        onValueChange = { newUrl = it },
-                        label = { Text("Download URL") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = newChecksum,
-                        onValueChange = { newChecksum = it },
-                        label = { Text("Expected Checksum (Optional: sha256:..., md5:..., crc32:...)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    Text("Max Simultaneous Connections: ${newConnections.toInt()} / 128")
-                    Slider(
-                        value = newConnections,
-                        onValueChange = { newConnections = it },
-                        valueRange = 1f..128f
-                    )
-                    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                        Button(
-                            onClick = {
-                                if (newUrl.isNotBlank()) {
-                                    onAddDownload(
-                                        newUrl.trim(),
-                                        newConnections.toInt(),
-                                        selectedCategory.takeIf { it != "All" && it != "Unfinished" && it != "Finished" } ?: "General",
-                                        newChecksum.takeIf { it.isNotBlank() }
-                                    )
-                                    newUrl = ""
-                                    newChecksum = ""
-                                    showAddPanel = false
-                                }
-                            }
-                        ) {
-                            Text("Start Download")
                         }
                     }
                 }
@@ -309,27 +323,36 @@ fun DownloadsScreen(
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = "No transfers",
+                    text = "No downloads yet",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Tap '+' Add URL (128T) or share a link from YouTube, TikTok, Facebook, or your browser.",
+                    text = "Tap '+' at the top or share a link from YouTube, TikTok, or your browser.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    textAlign = TextAlign.Center
                 )
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = { onOpenNewDownloadSheet?.invoke() ?: run { showFallbackAddSheet = true } },
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("New download")
+                }
             }
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(12.dp),
+                contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(filteredDownloads, key = { it.id }) { item ->
-                    DownloadItemCard(
+                    PdmDownloadItemCard(
                         item = item,
                         onTogglePauseResume = { onTogglePauseResume(item.id) },
                         onRetry = { onRetryDownload(item.id) },
@@ -344,165 +367,244 @@ fun DownloadsScreen(
 }
 
 @Composable
-private fun DownloadItemCard(
+private fun PdmDownloadItemCard(
     item: DownloadItemUi,
     onTogglePauseResume: () -> Unit,
     onRetry: () -> Unit,
     onDelete: () -> Unit,
     onInspect: () -> Unit,
-    onOpenFile: () -> Unit = {}
+    onOpenFile: () -> Unit
 ) {
+    val ext = remember(item.name) {
+        item.name.substringAfterLast('.', "").uppercase().take(4).ifBlank { "FILE" }
+    }
+    val badgeColor = when (ext) {
+        "MP4", "MKV", "WEBM", "MOV" -> Color(0xFF8B5CF6)
+        "MP3", "FLAC", "AAC", "WAV" -> Color(0xFFEC4899)
+        "ISO", "ZIP", "RAR", "7Z", "GZ" -> Color(0xFF3355FF)
+        "APK", "EXE", "DEB" -> Color(0xFF10B981)
+        "PDF", "DOC", "EPUB" -> Color(0xFFF59E0B)
+        else -> MaterialTheme.colorScheme.primary
+    }
+
     Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onInspect),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            .clickable(onClick = onInspect)
     ) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                // Left File-Type Squircle Badge (PDM style)
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(badgeColor.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = ext,
+                            color = badgeColor,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 12.sp
+                        )
+                        val platform = LinkParser.detectPlatformName(item.url)
+                        if (platform != "Direct") {
+                            Text(
+                                text = platform.take(4).uppercase(),
+                                color = badgeColor.copy(alpha = 0.75f),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 8.sp
+                            )
+                        }
+                    }
+                }
+
+                // Middle Filename + Speed Pill + Progress Info
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = item.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        val platform = LinkParser.detectPlatformName(item.url)
-                        if (platform != "Direct") {
+                        if (item.status == "Downloading" && item.speedBps > 0) {
                             Surface(
-                                shape = RoundedCornerShape(4.dp),
+                                shape = RoundedCornerShape(8.dp),
                                 color = MaterialTheme.colorScheme.primaryContainer
                             ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Bolt,
+                                        contentDescription = null,
+                                        tint = Color(0xFFF59E0B),
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Text(
+                                        text = formatSpeed(item.speedBps),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        } else {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = when (item.status) {
+                                    "Completed" -> Color(0xFF10B981).copy(alpha = 0.14f)
+                                    "Failed" -> MaterialTheme.colorScheme.errorContainer
+                                    else -> MaterialTheme.colorScheme.surfaceVariant
+                                }
+                            ) {
                                 Text(
-                                    text = platform,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    text = item.status,
+                                    color = when (item.status) {
+                                        "Completed" -> Color(0xFF10B981)
+                                        "Failed" -> MaterialTheme.colorScheme.error
+                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
                                     fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                                 )
                             }
                         }
+
+                        val pct = (item.progressFraction * 100).toInt()
+                        val totalStr = if (item.totalBytes > 0) formatBytes(item.totalBytes) else formatBytes(item.downloadedBytes)
                         Text(
-                            text = item.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
+                            text = if (item.status == "Completed") totalStr else "$pct% of $totalStr",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    val flag = countryFlagEmoji(item.countryCode)
-                    val etaStr = item.etaSeconds?.let { " • ETA ${formatEta(it)}" } ?: ""
-                    Text(
-                        text = "${item.category} • ${item.status}$etaStr • $flag ${item.countryName ?: "Direct"}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    if (item.status == "Completed") {
-                        Button(
-                            onClick = onOpenFile,
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            modifier = Modifier.height(34.dp)
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = "Open File", modifier = Modifier.size(15.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Open", fontWeight = FontWeight.Bold)
-                        }
-                        IconButton(onClick = onDelete, modifier = Modifier.size(34.dp)) {
+                // Right Circular Progress Ring Action Button (PDM signature)
+                if (item.status == "Completed") {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clickable(onClick = onOpenFile)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                Icons.Default.Delete,
-                                contentDescription = "Delete",
-                                tint = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
+                                Icons.AutoMirrored.Filled.OpenInNew,
+                                contentDescription = "Open File",
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
-                    } else if (item.status == "Failed") {
-                        IconButton(onClick = onRetry) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Retry", tint = MaterialTheme.colorScheme.error)
-                        }
-                        IconButton(onClick = onDelete) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.outline)
-                        }
-                    } else {
-                        IconButton(onClick = onTogglePauseResume) {
-                            val icon = when (item.status) {
-                                "Downloading", "Probing" -> Icons.Default.Pause
-                                else -> Icons.Default.PlayArrow
-                            }
-                            Icon(icon, contentDescription = item.status, tint = MaterialTheme.colorScheme.primary)
-                        }
-                        IconButton(onClick = onDelete) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.outline)
-                        }
                     }
+                } else {
+                    CircularProgressActionButton(
+                        progress = item.progressFraction,
+                        isActive = item.status == "Downloading" || item.status == "Probing",
+                        isFailed = item.status == "Failed",
+                        onClick = if (item.status == "Failed") onRetry else onTogglePauseResume
+                    )
                 }
             }
 
-            // Error display if failed
+            // Error display if failed (with tap-to-refresh hint)
             if (item.status == "Failed" && item.errorMessage != null) {
                 Surface(
-                    shape = RoundedCornerShape(6.dp),
+                    shape = RoundedCornerShape(10.dp),
                     color = MaterialTheme.colorScheme.errorContainer,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Icon(Icons.Default.Error, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(14.dp))
                         Text(
-                            text = item.errorMessage ?: "Failed",
+                            text = "${item.errorMessage} • Tap card to Refresh Link",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
             }
-
-            LinearProgressIndicator(
-                progress = { item.progressFraction },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                val downloadedStr = formatBytes(item.downloadedBytes)
-                val totalStr = if (item.totalBytes > 0) formatBytes(item.totalBytes) else "—"
-                Text(
-                    text = "$downloadedStr / $totalStr (${(item.progressFraction * 100).toInt()}%)",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Text(
-                    text = "${item.activeConnections}/${item.maxConnections}T • ${formatSpeed(item.speedBps)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            // Live 128-Connection Segment Map Bar
-            if (item.status == "Downloading" || item.segments.isNotEmpty()) {
-                SegmentMapBar(
-                    segments = item.segments,
-                    maxConnections = item.maxConnections,
-                    activeConnections = item.activeConnections
-                )
-            }
         }
+    }
+}
+
+@Composable
+private fun CircularProgressActionButton(
+    progress: Float,
+    isActive: Boolean,
+    isFailed: Boolean,
+    onClick: () -> Unit
+) {
+    val trackColor = MaterialTheme.colorScheme.outlineVariant
+    val activeColor = if (isFailed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val stroke = 3.dp.toPx()
+            drawArc(
+                color = trackColor,
+                startAngle = -90f,
+                sweepAngle = 360f,
+                useCenter = false,
+                style = Stroke(width = stroke, cap = StrokeCap.Round)
+            )
+            drawArc(
+                color = activeColor,
+                startAngle = -90f,
+                sweepAngle = 360f * progress.coerceIn(0f, 1f),
+                useCenter = false,
+                style = Stroke(width = stroke, cap = StrokeCap.Round)
+            )
+        }
+        Icon(
+            imageVector = when {
+                isFailed -> Icons.Default.Refresh
+                isActive -> Icons.Default.Pause
+                else -> Icons.Default.PlayArrow
+            },
+            contentDescription = null,
+            tint = activeColor,
+            modifier = Modifier.size(18.dp)
+        )
     }
 }
 

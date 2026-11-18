@@ -1,5 +1,6 @@
 package com.hyperstream.downloadmanager.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,11 +20,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -35,6 +39,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -51,13 +56,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.hyperstream.downloadmanager.core.DownloadItemUi
-import com.hyperstream.downloadmanager.ui.components.SegmentMapBar
 import com.hyperstream.downloadmanager.util.FileOpener
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -193,59 +200,140 @@ fun ProgressInspectorSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    val statusColor = when (item.status) {
-                        "Downloading" -> Color(0xFF00E676)
-                        "Completed" -> MaterialTheme.colorScheme.primary
-                        "Probing" -> Color(0xFFFFB300)
-                        "Failed" -> MaterialTheme.colorScheme.error
-                        else -> MaterialTheme.colorScheme.outline
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(statusColor)
-                    )
-                    Text(
-                        text = "128-Thread Segment Inspector",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                Text(
+                    text = "Download details",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
                     Icon(Icons.Default.Close, contentDescription = "Close Inspector")
                 }
             }
 
-            // File Name & Details
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = item.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                val flag = countryFlagEmoji(item.countryCode)
-                val locStr = item.countryName ?: "Direct CDN"
-                Text(
-                    text = "Status: ${item.status} • $flag $locStr • Queue: ${item.queue} • Max ${item.maxConnections}T",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                val resolvedFile = FileOpener.resolveFile(item)
-                Text(
-                    text = "File: ${resolvedFile.absolutePath}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+            // PDM Royal Blue Hero Details Card
+            val heroGradient = Brush.linearGradient(
+                colors = listOf(Color(0xFF3F5EFB), Color(0xFF2B44E7)),
+                start = Offset(0f, 0f),
+                end = Offset(700f, 700f)
+            )
+            val pct = (item.progressFraction * 100).toInt()
+            val downloadedStr = formatBytes(item.downloadedBytes)
+            val totalStr = if (item.totalBytes > 0) formatBytes(item.totalBytes) else "Unknown"
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(heroGradient)
+                    .padding(16.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.White.copy(alpha = 0.18f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = item.name.substringAfterLast('.', "FILE").uppercase().take(4),
+                                color = Color.White,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 12.sp
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = item.name,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(999.dp),
+                                color = Color.White.copy(alpha = 0.18f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .clip(CircleShape)
+                                            .background(if (item.status == "Failed") Color(0xFFFCA5A5) else Color(0xFF4ADE80))
+                                    )
+                                    Text(
+                                        text = "${item.status} • ${countryFlagEmoji(item.countryCode)} ${item.countryName ?: "Direct"}",
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        Text(
+                            text = "$pct%",
+                            color = Color.White,
+                            fontSize = 36.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            lineHeight = 38.sp
+                        )
+                        Text(
+                            text = "$downloadedStr / $totalStr",
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    LinearProgressIndicator(
+                        progress = { item.progressFraction },
+                        color = Color.White,
+                        trackColor = Color.White.copy(alpha = 0.25f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(7.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        DetailGlassTile(
+                            icon = { Icon(Icons.Default.Bolt, null, tint = Color(0xFFFACC15), modifier = Modifier.size(14.dp)) },
+                            label = "Speed",
+                            value = formatSpeed(item.speedBps),
+                            modifier = Modifier.weight(1f)
+                        )
+                        DetailGlassTile(
+                            icon = { Icon(Icons.Default.Schedule, null, tint = Color(0xFFBAE6FD), modifier = Modifier.size(14.dp)) },
+                            label = "Remaining",
+                            value = item.etaSeconds?.let { formatEta(it) } ?: "—",
+                            modifier = Modifier.weight(1f)
+                        )
+                        DetailGlassTile(
+                            icon = { Icon(Icons.Default.Link, null, tint = Color(0xFF86EFAC), modifier = Modifier.size(14.dp)) },
+                            label = "Threads",
+                            value = "${item.activeConnections}/${item.maxConnections}",
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
             }
 
             // Error display if failed
@@ -274,39 +362,81 @@ fun ProgressInspectorSheet(
                 }
             }
 
-            // Live Segment Map Bar
-            SegmentMapBar(
-                segments = item.segments,
-                maxConnections = item.maxConnections,
-                activeConnections = item.activeConnections
-            )
-
-            // Telemetry: Size & Speed
+            // PDM-style Connection Map Card (rounded vertical/pill blocks)
             Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val downloadedStr = formatBytes(item.downloadedBytes)
-                    val totalStr = if (item.totalBytes > 0) formatBytes(item.totalBytes) else "Unknown"
-                    Text(
-                        text = "$downloadedStr / $totalStr (${(item.progressFraction * 100).toInt()}%)",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = formatSpeed(item.speedBps),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Connection map", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                text = "${item.maxConnections} parallel connections",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = MaterialTheme.colorScheme.surface
+                        ) {
+                            Text(
+                                text = "${item.activeConnections} / ${item.maxConnections}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        val displaySegs = item.segments.take(16)
+                        if (displaySegs.isEmpty()) {
+                            val blocks = item.maxConnections.coerceIn(4, 16)
+                            for (i in 0 until blocks) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(22.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(
+                                            if (item.status == "Completed") MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.outlineVariant
+                                        )
+                                )
+                            }
+                        } else {
+                            displaySegs.forEach { seg ->
+                                val segDone = seg.end > 0 && seg.pos >= seg.end
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(22.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(
+                                            when {
+                                                segDone -> MaterialTheme.colorScheme.primary
+                                                seg.active -> Color(0xFF38BDF8)
+                                                else -> MaterialTheme.colorScheme.outlineVariant
+                                            }
+                                        )
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -428,6 +558,45 @@ fun ProgressInspectorSheet(
                     Text("Delete")
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun DetailGlassTile(
+    icon: @Composable () -> Unit,
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = Color.White.copy(alpha = 0.14f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                icon()
+                Text(
+                    text = label,
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 11.sp
+                )
+            }
+            Text(
+                text = value,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                maxLines = 1
+            )
         }
     }
 }

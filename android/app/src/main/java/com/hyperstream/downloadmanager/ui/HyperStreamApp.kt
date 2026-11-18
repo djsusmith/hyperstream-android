@@ -1,20 +1,31 @@
 package com.hyperstream.downloadmanager.ui
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Grain
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -23,10 +34,16 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -125,6 +142,9 @@ fun HyperStreamAppContent(
     var selectedCategory by remember { mutableStateOf("All") }
     var inspectedDownloadId by remember { mutableStateOf<Long?>(null) }
     var activePickerUrl by remember { mutableStateOf<String?>(null) }
+    var showNewDownloadSheet by remember { mutableStateOf(false) }
+    var showSearchBar by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
 
     val context = LocalContext.current
     var availableUpdate by remember { mutableStateOf<UpdateCheckResult.UpdateAvailable?>(null) }
@@ -157,14 +177,19 @@ fun HyperStreamAppContent(
         darkModePref = state.settings.darkMode
     ) {
         Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background
+                    ),
                     title = {
                         Column {
-                            Text("HyperStream", fontWeight = FontWeight.Bold)
+                            Text("HyperStream", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
                             Text(
-                                text = "128-Thread Multi-Engine • Ahnaf Hasan Susmith",
-                                style = androidx.compose.material3.MaterialTheme.typography.labelSmall
+                                text = "128-Thread Engine • Ahnaf Hasan Susmith",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     },
@@ -176,14 +201,76 @@ fun HyperStreamAppContent(
                                     containerColor = MaterialTheme.colorScheme.primaryContainer
                                 ),
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.padding(end = 6.dp)
                             ) {
                                 Text(
-                                    text = "🚀 Update v${upd.version}",
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    text = "v${upd.version}",
+                                    color = MaterialTheme.colorScheme.primary,
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold
                                 )
+                            }
+                        }
+                        // PDM-style 3 rounded-square action buttons (+, Search, Grabber)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(end = 6.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clickable { showNewDownloadSheet = true }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.Add,
+                                        contentDescription = "New Download",
+                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (showSearchBar) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clickable {
+                                        selectedTab = 0
+                                        showSearchBar = !showSearchBar
+                                        if (!showSearchBar) searchQuery = ""
+                                    }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.Search,
+                                        contentDescription = "Search Downloads",
+                                        tint = if (showSearchBar) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clickable { selectedTab = 1 }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.Language,
+                                        contentDescription = "Media Grabber",
+                                        tint = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
                             }
                         }
                         IconButton(onClick = { selectedTab = 5 }) {
@@ -196,38 +283,81 @@ fun HyperStreamAppContent(
                 )
             },
             bottomBar = {
-                // 5 Bottom Tabs: Labels never wrap on any Android phone screen size
-                NavigationBar {
-                    NavigationBarItem(
-                        selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
-                        icon = { Icon(Icons.Default.CloudDownload, contentDescription = null) },
-                        label = { Text("Downloads", maxLines = 1) }
-                    )
-                    NavigationBarItem(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        icon = { Icon(Icons.Default.VideoLibrary, contentDescription = null) },
-                        label = { Text("Grabber", maxLines = 1) }
-                    )
-                    NavigationBarItem(
-                        selected = selectedTab == 2,
-                        onClick = { selectedTab = 2 },
-                        icon = { Icon(Icons.Default.Grain, contentDescription = null) },
-                        label = { Text("Torrents", maxLines = 1) }
-                    )
-                    NavigationBarItem(
-                        selected = selectedTab == 3,
-                        onClick = { selectedTab = 3 },
-                        icon = { Icon(Icons.Default.Schedule, contentDescription = null) },
-                        label = { Text("Queues", maxLines = 1) }
-                    )
-                    NavigationBarItem(
-                        selected = selectedTab == 4,
-                        onClick = { selectedTab = 4 },
-                        icon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                        label = { Text("Settings", maxLines = 1) }
-                    )
+                // PDM-style Floating Pill Bottom Navigation Bar
+                val activeCount = state.downloads.count { it.status == "Downloading" || it.status == "Probing" }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(26.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        shadowElevation = 8.dp,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        NavigationBar(
+                            containerColor = Color.Transparent,
+                            tonalElevation = 0.dp
+                        ) {
+                            val itemColors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primary,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            NavigationBarItem(
+                                selected = selectedTab == 0,
+                                onClick = { selectedTab = 0 },
+                                colors = itemColors,
+                                icon = {
+                                    BadgedBox(
+                                        badge = {
+                                            if (activeCount > 0) {
+                                                Badge(containerColor = Color(0xFFEF4444)) {
+                                                    Text(activeCount.toString(), color = Color.White)
+                                                }
+                                            }
+                                        }
+                                    ) {
+                                        Icon(Icons.Default.CloudDownload, contentDescription = null)
+                                    }
+                                },
+                                label = { Text("Downloads", maxLines = 1, fontSize = 10.sp) }
+                            )
+                            NavigationBarItem(
+                                selected = selectedTab == 1,
+                                onClick = { selectedTab = 1 },
+                                colors = itemColors,
+                                icon = { Icon(Icons.Default.VideoLibrary, contentDescription = null) },
+                                label = { Text("Grabber", maxLines = 1, fontSize = 10.sp) }
+                            )
+                            NavigationBarItem(
+                                selected = selectedTab == 2,
+                                onClick = { selectedTab = 2 },
+                                colors = itemColors,
+                                icon = { Icon(Icons.Default.Grain, contentDescription = null) },
+                                label = { Text("Torrents", maxLines = 1, fontSize = 10.sp) }
+                            )
+                            NavigationBarItem(
+                                selected = selectedTab == 3,
+                                onClick = { selectedTab = 3 },
+                                colors = itemColors,
+                                icon = { Icon(Icons.Default.Schedule, contentDescription = null) },
+                                label = { Text("Schedule", maxLines = 1, fontSize = 10.sp) }
+                            )
+                            NavigationBarItem(
+                                selected = selectedTab == 4,
+                                onClick = { selectedTab = 4 },
+                                colors = itemColors,
+                                icon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                label = { Text("Settings", maxLines = 1, fontSize = 10.sp) }
+                            )
+                        }
+                    }
                 }
             }
         ) { innerPadding ->
@@ -250,7 +380,11 @@ fun HyperStreamAppContent(
                         onCancelDownload = onCancelDownload,
                         onInspectDownload = { item ->
                             inspectedDownloadId = item.id
-                        }
+                        },
+                        showSearchBar = showSearchBar,
+                        searchQuery = searchQuery,
+                        onSearchQueryChange = { searchQuery = it },
+                        onOpenNewDownloadSheet = { showNewDownloadSheet = true }
                     )
                     1 -> GrabberScreen(
                         repository = repository,
@@ -311,6 +445,19 @@ fun HyperStreamAppContent(
                             selectedTab = 0 // Switch to Downloads tab to see the live download
                             activePickerUrl = null
                             onClearPendingSharedUrl()
+                        }
+                    )
+                }
+
+                // PDM-style New Download Sheet
+                if (showNewDownloadSheet) {
+                    com.hyperstream.downloadmanager.ui.screens.NewDownloadSheet(
+                        defaultConnections = state.settings.maxConnections,
+                        defaultCategory = selectedCategory,
+                        onDismiss = { showNewDownloadSheet = false },
+                        onStartDownload = { url, conns, cat, _ ->
+                            onAddDownload(url, null, conns, cat)
+                            selectedTab = 0
                         }
                     )
                 }

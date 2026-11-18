@@ -50,7 +50,7 @@ sealed class UpdateCheckResult {
 
 object UpdateChannelManager {
     const val GITHUB_RELEASES_API = "https://api.github.com/repos/djsusmith/hyperstream-android/releases"
-    const val DEFAULT_FALLBACK_APK = "https://gh-proxy.com/https://github.com/djsusmith/hyperstream-android/releases/download/v0.6.2/HyperStream-v0.6.2-arm64.apk"
+    const val DEFAULT_FALLBACK_APK = "https://gh-proxy.com/https://github.com/djsusmith/hyperstream-android/releases/download/v0.6.3/HyperStream-v0.6.3-arm64.apk"
 
     /**
      * Resolves nearest high-speed CDN mirror for GitHub releases to bypass slow S3 routing.
