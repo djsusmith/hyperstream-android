@@ -22,7 +22,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -49,6 +51,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,11 +62,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hyperstream.downloadmanager.browser.LinkParser
+import com.hyperstream.downloadmanager.browser.VideoGrabberWebView
 import com.hyperstream.downloadmanager.core.DownloadItemUi
 import com.hyperstream.downloadmanager.util.FileOpener
 
@@ -78,21 +84,35 @@ fun ProgressInspectorSheet(
     onRefreshLink: ((String) -> Unit)? = null
 ) {
     val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var alsoDeleteFromStorage by remember { mutableStateOf(true) }
     var showRefreshLinkDialog by remember { mutableStateOf(false) }
+    var showBrowserCatcher by remember { mutableStateOf(false) }
     var refreshUrlInput by remember(item.url) { mutableStateOf(item.url) }
 
     if (showRefreshLinkDialog) {
+        // Auto-populate from clipboard if a newer valid URL was copied
+        LaunchedEffect(Unit) {
+            val clipText = clipboard.getText()?.text?.trim()
+            val extracted = LinkParser.extractFirstUrl(clipText)
+            if (!extracted.isNullOrBlank() && extracted != item.url) {
+                refreshUrlInput = extracted
+            }
+        }
+
         AlertDialog(
-            onDismissRequest = { showRefreshLinkDialog = false },
+            onDismissRequest = {
+                showRefreshLinkDialog = false
+                showBrowserCatcher = false
+            },
             icon = { Icon(Icons.Default.Refresh, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
             title = { Text("Refresh Download Link", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "Update expired streaming or CDN tokens (YouTube, TikTok, file hosts) and seamlessly resume existing chunks.",
+                        text = "Paste a fresh link or open the source page in the built-in browser — tap Download on the page and HyperStream will catch the new URL and resume from ${(item.progressFraction * 100).toInt()}%.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -100,10 +120,73 @@ fun ProgressInspectorSheet(
                         value = refreshUrlInput,
                         onValueChange = { refreshUrlInput = it },
                         label = { Text("New Download URL") },
+                        trailingIcon = {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                modifier = Modifier
+                                    .padding(end = 6.dp)
+                                    .clickable {
+                                        clipboard.getText()?.text?.let { clip ->
+                                            refreshUrlInput = LinkParser.extractFirstUrl(clip) ?: clip.trim()
+                                        }
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.ContentPaste,
+                                        contentDescription = "Paste",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = "Paste",
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        },
                         singleLine = false,
-                        maxLines = 4,
+                        maxLines = 3,
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    OutlinedButton(
+                        onClick = { showBrowserCatcher = !showBrowserCatcher },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Language, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (showBrowserCatcher) "Hide Built-in Browser" else "Catch New Link in Built-in Browser")
+                    }
+
+                    if (showBrowserCatcher) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(280.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                        ) {
+                            VideoGrabberWebView(
+                                initialUrl = refreshUrlInput.ifBlank { item.url },
+                                onDownloadDetectedMedia = { caughtUrl ->
+                                    refreshUrlInput = caughtUrl
+                                    showBrowserCatcher = false
+                                    onRefreshLink?.invoke(caughtUrl)
+                                    showRefreshLinkDialog = false
+                                    onDismiss()
+                                }
+                            )
+                        }
+                    }
                 }
             },
             confirmButton = {
@@ -113,6 +196,7 @@ fun ProgressInspectorSheet(
                         if (trimmed.isNotBlank()) {
                             onRefreshLink?.invoke(trimmed)
                             showRefreshLinkDialog = false
+                            showBrowserCatcher = false
                             onDismiss()
                         }
                     }
@@ -121,7 +205,12 @@ fun ProgressInspectorSheet(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showRefreshLinkDialog = false }) {
+                TextButton(
+                    onClick = {
+                        showRefreshLinkDialog = false
+                        showBrowserCatcher = false
+                    }
+                ) {
                     Text("Cancel")
                 }
             }
