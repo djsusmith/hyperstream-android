@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://github.com/djsusmith/hyperstream-android/actions/workflows/android-ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/djsusmith/hyperstream-android/android-ci.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI%20Build" alt="CI Status" /></a>
   <a href="https://github.com/djsusmith/hyperstream-android/releases/latest"><img src="https://img.shields.io/github/v/release/djsusmith/hyperstream-android?style=for-the-badge&color=818CF8&label=Release" alt="Latest Release" /></a>
-  <a href="https://github.com/djsusmith/hyperstream-android/releases"><img src="https://img.shields.io/github/downloads/djsusmith/hyperstream-android/total?style=for-the-badge&color=10B981&label=Downloads" alt="Total Downloads" /></a>
+  <a href="https://github.com/djsusmith/hyperstream-android/releases"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdjsusmith.github.io%2Fhyperstream-android%2Fstats.json&query=%24.meta_leads&style=for-the-badge&color=10B981&label=Downloads" alt="Total Downloads" /></a>
   <a href="https://github.com/djsusmith/hyperstream-android/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-34D399?style=for-the-badge&logo=gnu&logoColor=white" alt="GPL-3.0 License" /></a>
   <a href="https://djsusmith.github.io/hyperstream-android/"><img src="https://img.shields.io/badge/Live-Website%20%26%20Docs-38BDF8?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Live Website" /></a>
   <img src="https://img.shields.io/badge/Platform-Android%209.0%2B%20(API%2028%2B)-F97316?style=for-the-badge&logo=android&logoColor=white" alt="Android Support" />
