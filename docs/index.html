@@ -726,6 +726,345 @@
       background: rgba(255, 255, 255, 0.16);
     }
 
+    /* A2UI Interactive Surface, Catalog & Wire Showcase */
+    .a2ui-mode-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .a2ui-view-tabs {
+      display: inline-flex;
+      background: rgba(7, 10, 19, 0.75);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 4px;
+      gap: 4px;
+    }
+
+    .a2ui-view-tab {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 0.86rem;
+      font-weight: 700;
+      padding: 8px 16px;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .a2ui-view-tab.active {
+      background: linear-gradient(135deg, #3f5efb, #2b44e7);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(63, 94, 251, 0.4);
+    }
+
+    .a2ui-stage {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 28px;
+      align-items: start;
+    }
+
+    @media (max-width: 900px) {
+      .a2ui-stage {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Interactive Phone Mockup (Royal Speedometer UI) */
+    .phone-frame {
+      background: #0b0e17;
+      border: 2px solid rgba(255, 255, 255, 0.13);
+      border-radius: 34px;
+      padding: 16px 14px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65), 0 0 40px rgba(63, 94, 251, 0.18);
+      max-width: 390px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .phone-topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 4px 12px;
+    }
+
+    .phone-brand-title {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1.15;
+    }
+
+    .phone-brand-sub {
+      font-size: 0.68rem;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+
+    .phone-top-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .phone-sq-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .phone-sq-btn.primary {
+      background: #3355ff;
+      border-color: #4f6bff;
+      box-shadow: 0 4px 12px rgba(51, 85, 255, 0.45);
+    }
+
+    .phone-sq-btn:hover {
+      transform: translateY(-1px);
+    }
+
+    /* Royal Speedometer Hero Card inside Phone */
+    .royal-hero-card {
+      background: linear-gradient(135deg, #3f5efb 0%, #2b44e7 55%, #2237c9 100%);
+      border-radius: 22px;
+      padding: 14px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 10px 28px rgba(43, 68, 231, 0.45);
+      margin-bottom: 12px;
+    }
+
+    .royal-hero-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .royal-live-title {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .royal-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #4ade80;
+      box-shadow: 0 0 8px #4ade80;
+    }
+
+    .royal-pill-btn {
+      background: rgba(255, 255, 255, 0.16);
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      color: #fff;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .royal-dial-wrap {
+      text-align: center;
+      cursor: pointer;
+      padding: 2px 0 6px;
+    }
+
+    .royal-speed-big {
+      font-size: 1.9rem;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1.05;
+      margin-top: -6px;
+    }
+
+    .royal-speed-big small {
+      font-size: 0.85rem;
+      font-weight: 700;
+      opacity: 0.9;
+    }
+
+    .royal-peak-sub {
+      font-size: 0.7rem;
+      color: rgba(255, 255, 255, 0.82);
+      margin-top: 2px;
+    }
+
+    .royal-tiles-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 7px;
+      margin-top: 10px;
+    }
+
+    .royal-tile {
+      background: rgba(255, 255, 255, 0.13);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 13px;
+      padding: 6px 4px;
+      text-align: center;
+      color: #fff;
+    }
+
+    .royal-tile strong {
+      display: block;
+      font-size: 0.88rem;
+      font-weight: 800;
+    }
+
+    .royal-tile span {
+      font-size: 0.65rem;
+      opacity: 0.85;
+    }
+
+    /* Phone Filter Pills & Download Cards */
+    .phone-pills {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+      margin-bottom: 6px;
+    }
+
+    .phone-pill {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #cbd5e1;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 5px 11px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .phone-pill.active {
+      background: #3355ff;
+      border-color: #3355ff;
+      color: #fff;
+    }
+
+    .phone-dl-card {
+      background: #131826;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .phone-ext-badge {
+      width: 40px;
+      height: 40px;
+      border-radius: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    .phone-dl-meta {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .phone-dl-name {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 3px;
+    }
+
+    .phone-dl-sub {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.68rem;
+      color: #94a3b8;
+    }
+
+    .phone-speed-chip {
+      background: rgba(51, 85, 255, 0.2);
+      color: #93c5fd;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 6px;
+      font-size: 0.65rem;
+    }
+
+    .phone-ring-btn {
+      width: 34px;
+      height: 34px;
+      flex-shrink: 0;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .phone-nav-pill {
+      margin-top: 10px;
+      background: #151b2b;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 7px 10px;
+      display: flex;
+      justify-content: space-around;
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: #94a3b8;
+    }
+
+    .phone-nav-pill span.active {
+      color: #60a5fa;
+      background: rgba(51, 85, 255, 0.2);
+      padding: 3px 10px;
+      border-radius: 999px;
+    }
+
+    .a2ui-wire-pre {
+      background: #060913;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      padding: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: #93c5fd;
+      max-height: 440px;
+      overflow: auto;
+      line-height: 1.5;
+    }
+
     /* Comparison Table Section */
     .table-container {
       overflow-x: auto;
@@ -805,7 +1144,7 @@
       </a>
       <div class="nav-links">
         <a href="#features">Features</a>
-        <a href="#engine">128T Engine</a>
+        <a href="#engine">A2UI Surface</a>
         <a href="#comparison">Comparison</a>
         <a href="https://github.com/djsusmith/hyperstream-android" target="_blank" rel="noopener">GitHub</a>
         <a href="https://gh-proxy.com/https://github.com/djsusmith/hyperstream-android/releases/download/v0.6.3/HyperStream-v0.6.3-arm64.apk" class="btn btn-primary btn-nav" id="navDownloadBtn" onclick="trackDownload('navbar')">
@@ -959,49 +1298,202 @@
       </div>
     </section>
 
-    <!-- Interactive 128T Engine Showcase (Kiwi Next MCP style) -->
+    <!-- Interactive A2UI Surface, Catalog & Wire Showcase -->
     <section id="engine" class="engine-box">
-      <h2>⚡ Native Rust Multi-Engine Architecture</h2>
-      <p>
-        HyperStream bridges upstream Rust <code>mdm-engine</code> directly to Android userspace using zero-copy JNI. 
-        Select a transfer type below to simulate the dynamic segment chunking:
-      </p>
-
-      <div class="sim-tabs">
-        <button class="sim-tab-btn active" onclick="switchSimDemo('youtube', this)">YouTube 4K (128T)</button>
-        <button class="sim-tab-btn" onclick="switchSimDemo('tiktok', this)">TikTok No-Watermark</button>
-        <button class="sim-tab-btn" onclick="switchSimDemo('mp3', this)">320k MP3 Audio</button>
-        <button class="sim-tab-btn" onclick="switchSimDemo('torrent', this)">BitTorrent Swarm</button>
+      <div class="a2ui-mode-bar">
+        <div>
+          <h2 style="margin-bottom: 4px;">🧭 Interactive A2UI App Surface &amp; 128T Engine</h2>
+          <p style="margin-bottom: 0; font-size: 0.94rem;">
+            Built on the declarative <strong>A2UI Protocol</strong> (<code>Surface</code> &bull; <code>Catalog</code> &bull; <code>Wire JSON</code>). Interact with the live Android surface below:
+          </p>
+        </div>
+        <div class="a2ui-view-tabs">
+          <button class="a2ui-view-tab active" onclick="switchA2uiTab('surface', this)">📱 Live Surface</button>
+          <button class="a2ui-view-tab" onclick="switchA2uiTab('catalog', this)">🧩 Catalog</button>
+          <button class="a2ui-view-tab" onclick="switchA2uiTab('wire', this)">📡 Wire JSON</button>
+        </div>
       </div>
 
-      <div class="sim-card">
-        <div class="sim-header">
-          <div class="sim-title-group">
-            <h4 id="sim-filename">Cyberpunk_2077_4K_60FPS_HDR.mkv</h4>
-            <span id="sim-status">128 segments active &bull; 2.8 GB / 3.4 GB (82%)</span>
+      <!-- TAB 1: LIVE A2UI SURFACE (Phone UI + 128T Engine Controls) -->
+      <div id="a2ui-tab-surface" class="a2ui-stage">
+        <!-- Left: Interactive Android Phone Frame (v0.6.3 Royal Speedometer UI) -->
+        <div class="phone-frame">
+          <div class="phone-topbar">
+            <div>
+              <div class="phone-brand-title">HyperStream</div>
+              <div class="phone-brand-sub">128-Thread Download Manager</div>
+            </div>
+            <div class="phone-top-actions">
+              <button class="phone-sq-btn primary" title="New Download (Auto-Clipboard Probe)" onclick="dispatchA2uiAction('open_new_download_probe')">+</button>
+              <button class="phone-sq-btn" title="Quick Search" onclick="dispatchA2uiAction('toggle_search')">🔍</button>
+              <button class="phone-sq-btn" title="Built-in Browser Catcher" onclick="dispatchA2uiAction('open_browser_catcher')">🌐</button>
+            </div>
           </div>
-          <div class="sim-speed-badge" id="sim-speed">118.4 MB/s</div>
+
+          <!-- Royal Blue Speedometer Hero Card (A2UI SpeedometerHero Component) -->
+          <div class="royal-hero-card">
+            <div class="royal-hero-top">
+              <div class="royal-live-title">
+                <span class="royal-dot" id="phone-live-dot"></span>
+                <span>Total speed</span>
+              </div>
+              <div style="display:flex;gap:6px;">
+                <button class="royal-pill-btn" id="phone-pause-btn" onclick="dispatchA2uiAction('toggle_pause_all')">⏸ Pause all</button>
+              </div>
+            </div>
+
+            <div class="royal-dial-wrap" onclick="dispatchA2uiAction('toggle_dial_mode')" title="Tap to switch between Speedometer Dial and 128T Map">
+              <div id="phone-dial-view">
+                <svg width="175" height="94" viewBox="0 0 180 96" style="overflow:visible;">
+                  <path d="M 20 84 A 70 70 0 0 1 160 84" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="10" stroke-linecap="round" />
+                  <path id="phone-gauge-arc" d="M 20 84 A 70 70 0 0 1 160 84" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" stroke-dasharray="220" stroke-dashoffset="35" style="transition: stroke-dashoffset 0.35s ease;" />
+                  <line id="phone-gauge-needle" x1="90" y1="84" x2="136" y2="40" stroke="#facc15" stroke-width="3.2" stroke-linecap="round" style="transition: all 0.35s ease;" />
+                  <circle cx="90" cy="84" r="6" fill="#ffffff" />
+                  <circle cx="90" cy="84" r="3" fill="#2b44e7" />
+                </svg>
+                <div class="royal-speed-big"><span id="phone-speed-num">118.4</span> <small id="phone-speed-unit">MB/s</small></div>
+                <div class="royal-peak-sub" id="phone-peak-label">Peak 124.2 MB/s &bull; Tap for 128T map</div>
+              </div>
+              <div id="phone-map-view" style="display:none;padding:12px 0 6px;">
+                <div style="font-weight:800;font-size:0.92rem;color:#fff;margin-bottom:8px;" id="phone-map-title">128 / 128 Rust Threads Active</div>
+                <div id="phone-mini-map" style="display:grid;grid-template-columns:repeat(16,1fr);gap:3px;padding:4px;background:rgba(0,0,0,0.22);border-radius:8px;margin-bottom:6px;"></div>
+                <div class="royal-peak-sub">Dynamic Halving Active &bull; Tap for Speed Dial</div>
+              </div>
+            </div>
+
+            <div class="royal-tiles-row">
+              <div class="royal-tile"><strong id="phone-tile-active">⚡ 2</strong><span>Active</span></div>
+              <div class="royal-tile"><strong id="phone-tile-queued">⏳ 1</strong><span>Queued</span></div>
+              <div class="royal-tile"><strong id="phone-tile-done">✅ 14</strong><span>Done</span></div>
+            </div>
+          </div>
+
+          <!-- Dynamic Modal Banner inside Phone (shows when '+' Auto-Probe or Refresh Link is triggered) -->
+          <div id="phone-probe-banner" style="display:none;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);border-radius:14px;padding:10px;margin-bottom:10px;font-size:0.73rem;color:#ecfdf5;">
+            <div style="font-weight:800;color:#34d399;margin-bottom:3px;" id="phone-probe-title">📥 Auto-Clipboard Server Probe</div>
+            <div id="phone-probe-desc">Detected URL in clipboard &rarr; 206 Partial Content &bull; ✓ Server supports 128T resuming</div>
+          </div>
+
+          <!-- Filter Pills -->
+          <div class="phone-pills">
+            <span class="phone-pill active">All 4</span>
+            <span class="phone-pill">Downloading 2</span>
+            <span class="phone-pill">Completed 1</span>
+            <span class="phone-pill">Queued 1</span>
+          </div>
+
+          <!-- Download Cards inside Phone -->
+          <div id="phone-downloads-list">
+            <div class="phone-dl-card">
+              <div class="phone-ext-badge" style="background:rgba(139,92,246,0.18);color:#a78bfa;" id="phone-card1-ext">MKV</div>
+              <div class="phone-dl-meta">
+                <div class="phone-dl-name" id="phone-card1-name">Cyberpunk_2077_4K_60FPS_HDR.mkv</div>
+                <div class="phone-dl-sub">
+                  <span class="phone-speed-chip" id="phone-card1-speed">⚡ 118.4 MB/s</span>
+                  <span id="phone-card1-prog">82% of 3.4 GB</span>
+                </div>
+              </div>
+              <div class="phone-ring-btn">
+                <svg width="34" height="34" viewBox="0 0 36 36">
+                  <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="3" />
+                  <circle id="phone-card1-ring" cx="18" cy="18" r="15" fill="none" stroke="#3355ff" stroke-width="3" stroke-dasharray="94" stroke-dashoffset="17" stroke-linecap="round" transform="rotate(-90 18 18)" />
+                </svg>
+                <span style="position:absolute;font-size:0.65rem;color:#60a5fa;">⏸</span>
+              </div>
+            </div>
+
+            <div class="phone-dl-card">
+              <div class="phone-ext-badge" style="background:rgba(51,85,255,0.18);color:#60a5fa;">ISO</div>
+              <div class="phone-dl-meta">
+                <div class="phone-dl-name">Ubuntu-26.04-LTS-Desktop-arm64.iso</div>
+                <div class="phone-dl-sub">
+                  <span class="phone-speed-chip" style="background:rgba(16,185,129,0.18);color:#34d399;">Completed</span>
+                  <span>4.7 GB &bull; Verified SHA-256</span>
+                </div>
+              </div>
+              <div class="phone-ring-btn" style="background:rgba(51,85,255,0.2);border-radius:50%;color:#60a5fa;font-size:0.75rem;">↗</div>
+            </div>
+          </div>
+
+          <div class="phone-nav-pill">
+            <span class="active">⬇ Downloads</span>
+            <span>🎬 Grabber</span>
+            <span>🧲 Torrents</span>
+            <span>⏱ Schedule</span>
+            <span>⚙ Settings</span>
+          </div>
         </div>
 
-        <div class="waterfall-label">
-          <span>Active 128-Connection Waterfall Allocation</span>
-          <span id="sim-thread-badge">128 RUST THREADS</span>
-        </div>
+        <!-- Right: Interactive A2UI Controller & 128-Thread Waterfall -->
+        <div>
+          <div class="sim-tabs">
+            <button class="sim-tab-btn active" onclick="switchSimDemo('youtube', this)">YouTube 4K (128T)</button>
+            <button class="sim-tab-btn" onclick="switchSimDemo('tiktok', this)">TikTok No-Watermark</button>
+            <button class="sim-tab-btn" onclick="switchSimDemo('mp3', this)">320k MP3 Audio</button>
+            <button class="sim-tab-btn" onclick="switchSimDemo('torrent', this)">BitTorrent Swarm</button>
+            <button class="sim-tab-btn" onclick="dispatchA2uiAction('open_new_download_probe')">+ Auto-Probe Link</button>
+            <button class="sim-tab-btn" onclick="dispatchA2uiAction('open_browser_catcher')">🔄 Refresh Link Catcher</button>
+          </div>
 
-        <div class="waterfall-grid" id="sim-threads-grid">
-          <!-- Populated by JavaScript -->
-        </div>
+          <div class="sim-card">
+            <div class="sim-header">
+              <div class="sim-title-group">
+                <h4 id="sim-filename">Cyberpunk_2077_4K_60FPS_HDR.mkv</h4>
+                <span id="sim-status">128 segments active &bull; 2.8 GB / 3.4 GB (82%)</span>
+              </div>
+              <div class="sim-speed-badge" id="sim-speed">118.4 MB/s</div>
+            </div>
 
-        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-muted);">
-          <span>Dynamic Segment Halving: <strong style="color: #38bdf8;">ACTIVE (min_split 12KB)</strong></span>
-          <span id="sim-eta">ETA: 00:05</span>
+            <div class="waterfall-label">
+              <span>Active 128-Connection Waterfall Allocation</span>
+              <span id="sim-thread-badge">128 RUST THREADS</span>
+            </div>
+
+            <div class="waterfall-grid" id="sim-threads-grid">
+              <!-- Populated by JavaScript -->
+            </div>
+
+            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-muted);">
+              <span>Dynamic Segment Halving: <strong style="color: #38bdf8;">ACTIVE (min_split 12KB)</strong></span>
+              <span id="sim-eta">ETA: 00:05</span>
+            </div>
+          </div>
+
+          <p style="font-size: 0.92rem; margin-bottom: 10px;">Download release APK directly via GitHub CLI:</p>
+          <div class="code-snippet">
+            <code>gh release download v0.6.3 -R djsusmith/hyperstream-android -p "*.apk"</code>
+            <button class="copy-btn" onclick="copyCliCommand(this)">Copy</button>
+          </div>
         </div>
       </div>
 
-      <p style="font-size: 0.95rem; margin-bottom: 12px;">Build directly from source or download release APK with GitHub CLI:</p>
-      <div class="code-snippet">
-        <code>gh release download v0.6.3 -R djsusmith/hyperstream-android -p "*.apk"</code>
-        <button class="copy-btn" onclick="copyCliCommand(this)">Copy</button>
+      <!-- TAB 2: A2UI COMPONENT CATALOG -->
+      <div id="a2ui-tab-catalog" style="display:none;">
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon">🧭</div>
+            <h3><code>SpeedometerHero</code></h3>
+            <p>Declarative Royal Blue telemetry surface bound to <code>$.speedBps</code>, <code>$.peakBps</code>, <code>$.activeCount</code>, and <code>$.speedHistory</code>. Emits <code>toggle_dial_mode</code> and <code>pause_all</code> actions.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">📥</div>
+            <h3><code>NewDownloadProbeSheet</code></h3>
+            <p>Auto-reads clipboard URL on <code>+</code> tap and dispatches a range probe (<code>Range: bytes=0-0</code>) to populate filename, size, MIME badge, and <code>206 Partial Content</code> resume badge.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🌐</div>
+            <h3><code>RefreshLinkBrowserCatcher</code></h3>
+            <p>Embedded <code>VideoGrabberWebView</code> + <code>DownloadListener</code> inside Refresh Link that intercepts fresh CDN URLs and updates <code>.mdm.json</code> in-place.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: A2UI WIRE PROTOCOL INSPECTOR -->
+      <div id="a2ui-tab-wire" style="display:none;">
+        <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:12px;">
+          Live <code>A2uiSurface</code> wire payload (<code>updateComponents</code> + <code>updateDataModel</code>) synchronized with the Jetpack Compose renderer in <code>com.hyperstream.downloadmanager.a2ui</code>:
+        </p>
+        <pre class="a2ui-wire-pre" id="a2ui-wire-json"></pre>
       </div>
     </section>
 
@@ -1192,33 +1684,169 @@
     const simDemos = {
       youtube: {
         file: 'Cyberpunk_2077_4K_60FPS_HDR.mkv',
+        ext: 'MKV',
         status: '128 segments active • 2.8 GB / 3.4 GB (82%)',
+        progText: '82% of 3.4 GB',
+        pct: 82,
+        speedNum: '118.4',
+        speedUnit: 'MB/s',
         speed: '118.4 MB/s',
         threads: '128 RUST THREADS',
+        activeThreads: 128,
         eta: 'ETA: 00:05'
       },
       tiktok: {
         file: 'Viral_Tokyo_Drift_No_Watermark.mp4',
+        ext: 'MP4',
         status: '32 segments active • 84 MB / 84 MB (100%)',
+        progText: '100% of 84 MB',
+        pct: 100,
+        speedNum: '64.2',
+        speedUnit: 'MB/s',
         speed: '64.2 MB/s',
         threads: '32 RUST THREADS',
+        activeThreads: 32,
         eta: 'COMPLETE'
       },
       mp3: {
         file: 'Hans_Zimmer_Live_Concert_320kbps.mp3',
+        ext: 'MP3',
         status: 'Audio Extractor • 48 kHz / 320 kbps ID3 Tagged (94%)',
+        progText: '94% of 18.6 MB',
+        pct: 94,
+        speedNum: '42.1',
+        speedUnit: 'MB/s',
         speed: '42.1 MB/s',
         threads: '16 AUDIO THREADS',
+        activeThreads: 16,
         eta: 'ETA: 00:01'
       },
       torrent: {
         file: 'Ubuntu-26.04-LTS-Desktop-arm64.iso',
+        ext: 'ISO',
         status: 'librqbit swarm • 48 seeders • Sequential On (61%)',
+        progText: '61% of 4.7 GB',
+        pct: 61,
+        speedNum: '96.5',
+        speedUnit: 'MB/s',
         speed: '96.5 MB/s',
         threads: '64 PEER CONNECTIONS',
+        activeThreads: 64,
         eta: 'ETA: 00:14'
       }
     };
+
+    const a2uiState = {
+      surfaceId: 'hyperstream.downloads.hero',
+      activePreset: 'youtube',
+      paused: false,
+      showConnectionMap: false,
+      lastAction: 'init_surface'
+    };
+
+    function renderA2uiSurface() {
+      const data = simDemos[a2uiState.activePreset] || simDemos.youtube;
+      const speedVal = a2uiState.paused ? 0 : parseFloat(data.speedNum);
+      const frac = Math.min(1, Math.max(0, speedVal / 128));
+
+      // Update SVG gauge arc & needle
+      const arc = document.getElementById('phone-gauge-arc');
+      if (arc) arc.setAttribute('stroke-dashoffset', String(Math.round(220 * (1 - frac))));
+      const needle = document.getElementById('phone-gauge-needle');
+      if (needle) {
+        const angleRad = Math.PI + frac * Math.PI;
+        const x2 = 90 + Math.cos(angleRad) * 58;
+        const y2 = 84 + Math.sin(angleRad) * 58;
+        needle.setAttribute('x2', x2.toFixed(1));
+        needle.setAttribute('y2', y2.toFixed(1));
+      }
+
+      const numEl = document.getElementById('phone-speed-num');
+      if (numEl) numEl.textContent = a2uiState.paused ? '0.0' : data.speedNum;
+      const pauseBtn = document.getElementById('phone-pause-btn');
+      if (pauseBtn) pauseBtn.textContent = a2uiState.paused ? '▶ Resume' : '⏸ Pause all';
+      const dotEl = document.getElementById('phone-live-dot');
+      if (dotEl) dotEl.style.background = a2uiState.paused ? '#93c5fd' : '#4ade80';
+
+      const dialView = document.getElementById('phone-dial-view');
+      const mapView = document.getElementById('phone-map-view');
+      if (dialView && mapView) {
+        dialView.style.display = a2uiState.showConnectionMap ? 'none' : 'block';
+        mapView.style.display = a2uiState.showConnectionMap ? 'block' : 'none';
+      }
+      const mapTitle = document.getElementById('phone-map-title');
+      if (mapTitle) mapTitle.textContent = (a2uiState.paused ? 0 : data.activeThreads) + ' / 128 Rust Threads Active';
+
+      // Update primary download card in phone
+      const cExt = document.getElementById('phone-card1-ext');
+      const cName = document.getElementById('phone-card1-name');
+      const cSpeed = document.getElementById('phone-card1-speed');
+      const cProg = document.getElementById('phone-card1-prog');
+      const cRing = document.getElementById('phone-card1-ring');
+      if (cExt) cExt.textContent = data.ext;
+      if (cName) cName.textContent = data.file;
+      if (cSpeed) cSpeed.textContent = a2uiState.paused ? 'Paused' : ('⚡ ' + data.speed);
+      if (cProg) cProg.textContent = data.progText;
+      if (cRing) cRing.setAttribute('stroke-dashoffset', String(Math.round(94 * (1 - data.pct / 100))));
+
+      // Update live Wire JSON tab
+      const wireEl = document.getElementById('a2ui-wire-json');
+      if (wireEl) {
+        const wirePayload = {
+          surfaceId: a2uiState.surfaceId,
+          updateComponents: [
+            { id: 'hero_speedometer', component: 'SpeedometerHero', title: 'Total speed', bindings: { speedMbps: '$.speedMbps', activeThreads: '$.activeThreads', showConnectionMap: '$.showConnectionMap' } },
+            { id: 'primary_download_card', component: 'CircularRingDownloadCard', bindings: { fileName: '$.file', progressPct: '$.pct', speed: '$.speed' } }
+          ],
+          updateDataModel: {
+            file: data.file,
+            ext: data.ext,
+            speedMbps: speedVal,
+            activeThreads: a2uiState.paused ? 0 : data.activeThreads,
+            pct: data.pct,
+            paused: a2uiState.paused,
+            showConnectionMap: a2uiState.showConnectionMap,
+            lastAction: a2uiState.lastAction
+          }
+        };
+        wireEl.textContent = JSON.stringify(wirePayload, null, 2);
+      }
+    }
+
+    function dispatchA2uiAction(actionName) {
+      a2uiState.lastAction = actionName;
+      const banner = document.getElementById('phone-probe-banner');
+      const bTitle = document.getElementById('phone-probe-title');
+      const bDesc = document.getElementById('phone-probe-desc');
+
+      if (actionName === 'toggle_dial_mode') {
+        a2uiState.showConnectionMap = !a2uiState.showConnectionMap;
+      } else if (actionName === 'toggle_pause_all') {
+        a2uiState.paused = !a2uiState.paused;
+      } else if (actionName === 'open_new_download_probe' && banner && bTitle && bDesc) {
+        banner.style.display = 'block';
+        bTitle.textContent = '📥 Auto-Clipboard & Live Server Probe (+)';
+        bDesc.textContent = 'Auto-filled clipboard URL → Range: bytes=0-0 → 206 Partial Content • ✓ 128T Resumable';
+      } else if (actionName === 'open_browser_catcher' && banner && bTitle && bDesc) {
+        banner.style.display = 'block';
+        bTitle.textContent = '🌐 Built-in Browser Link Catcher (Refresh Link)';
+        bDesc.textContent = 'Intercepted fresh signed CDN link from webpage → updated .mdm.json & resumed at ' + (simDemos[a2uiState.activePreset]?.pct || 82) + '%!';
+      } else if (actionName === 'toggle_search' && banner && bTitle && bDesc) {
+        banner.style.display = banner.style.display === 'none' ? 'block' : 'none';
+        bTitle.textContent = '🔍 Instant Filter & Search';
+        bDesc.textContent = 'Filtering active & completed transfers by filename, domain, or category.';
+      }
+      renderA2uiSurface();
+    }
+
+    function switchA2uiTab(tab, btn) {
+      document.querySelectorAll('.a2ui-view-tab').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      document.getElementById('a2ui-tab-surface').style.display = tab === 'surface' ? 'grid' : 'none';
+      document.getElementById('a2ui-tab-catalog').style.display = tab === 'catalog' ? 'block' : 'none';
+      document.getElementById('a2ui-tab-wire').style.display = tab === 'wire' ? 'block' : 'none';
+      renderA2uiSurface();
+    }
 
     function switchSimDemo(type, btn) {
       document.querySelectorAll('.sim-tab-btn').forEach(b => b.classList.remove('active'));
@@ -1226,6 +1854,10 @@
 
       const data = simDemos[type];
       if (!data) return;
+
+      a2uiState.activePreset = type;
+      a2uiState.paused = false;
+      a2uiState.lastAction = 'select_preset:' + type;
 
       document.getElementById('sim-filename').textContent = data.file;
       document.getElementById('sim-status').textContent = data.status;
@@ -1237,18 +1869,32 @@
         fbq('trackCustom', 'SelectPlatform', { platform: type });
       }
 
+      renderA2uiSurface();
       pulseThreadBlocks();
     }
 
     function initThreadGrid() {
       const grid = document.getElementById('sim-threads-grid');
-      if (!grid) return;
-      grid.innerHTML = '';
-      for (let i = 0; i < 64; i++) {
-        const div = document.createElement('div');
-        div.className = 'thread-block ' + (Math.random() > 0.35 ? 'active' : 'done');
-        grid.appendChild(div);
+      if (grid) {
+        grid.innerHTML = '';
+        for (let i = 0; i < 64; i++) {
+          const div = document.createElement('div');
+          div.className = 'thread-block ' + (Math.random() > 0.35 ? 'active' : 'done');
+          grid.appendChild(div);
+        }
       }
+      const mini = document.getElementById('phone-mini-map');
+      if (mini) {
+        mini.innerHTML = '';
+        for (let i = 0; i < 32; i++) {
+          const d = document.createElement('div');
+          d.style.height = '12px';
+          d.style.borderRadius = '3px';
+          d.style.background = i < 26 ? '#4ade80' : 'rgba(255,255,255,0.22)';
+          mini.appendChild(d);
+        }
+      }
+      renderA2uiSurface();
     }
 
     function pulseThreadBlocks() {
