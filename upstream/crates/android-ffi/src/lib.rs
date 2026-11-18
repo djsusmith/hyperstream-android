@@ -227,4 +227,35 @@ mod tests {
         assert_eq!(main_dl.status, "Downloading");
         assert_eq!(night_dl.status, "Queued");
     }
+
+    #[test]
+    fn refresh_link_updates_download_url_and_resumes_paused_or_failed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let ctrl = controller::AndroidCoreController::new(
+            tmp.path().join("data"),
+            tmp.path().join("downloads"),
+        )
+        .unwrap();
+
+        let add_res = ctrl.handle_command_json(
+            r#"{"op":"add_download","url":"https://example.com/expired-stream-url.mp4","connections":16,"category":"Video"}"#,
+        );
+        let add_json: serde_json::Value = serde_json::from_str(&add_res).unwrap();
+        let id = add_json["id"].as_u64().unwrap();
+
+        // Pause it
+        let _ = ctrl.handle_command_json(&format!(r#"{{"op":"pause_download","id":{id}}}"#));
+
+        // Refresh with fresh signed URL
+        let refresh_res = ctrl.handle_command_json(&format!(
+            r#"{{"op":"refresh_link","id":{id},"new_url":"https://example.com/fresh-signed-url.mp4"}}"#
+        ));
+        let refresh_json: serde_json::Value = serde_json::from_str(&refresh_res).unwrap();
+        assert_eq!(refresh_json["ok"], true);
+        assert_eq!(refresh_json["resumed"], true);
+
+        let snap = ctrl.snapshot();
+        let dl = snap.downloads.iter().find(|d| d.id == id).unwrap();
+        assert_eq!(dl.url, "https://example.com/fresh-signed-url.mp4");
+    }
 }

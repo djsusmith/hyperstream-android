@@ -79,6 +79,7 @@ fun HyperStreamApp(
         },
         onTogglePauseResume = { repository.togglePauseResume(it) },
         onRetryDownload = { repository.retryDownload(it) },
+        onRefreshLink = { id, newUrl -> repository.refreshLink(id, newUrl) },
         onCancelDownload = { id, del -> repository.cancelDownload(id, del) },
         onToggleQueue = { qName, running -> repository.toggleQueue(qName, running) },
         onAddMagnet = { src, seq -> repository.addTorrent(src, seq) },
@@ -112,6 +113,7 @@ fun HyperStreamAppContent(
     onAddDownload: (url: String, fileName: String?, connections: Int, category: String) -> Unit = { _, _, _, _ -> },
     onTogglePauseResume: (Long) -> Unit = {},
     onRetryDownload: (Long) -> Unit = {},
+    onRefreshLink: (Long, String) -> Unit = { _, _ -> },
     onCancelDownload: (Long, Boolean) -> Unit = { _, _ -> },
     onToggleQueue: (String, Boolean) -> Unit = { _, _ -> },
     onAddMagnet: (String, Boolean) -> Unit = { _, _ -> },
@@ -244,6 +246,7 @@ fun HyperStreamAppContent(
                         },
                         onTogglePauseResume = onTogglePauseResume,
                         onRetryDownload = onRetryDownload,
+                        onRefreshLink = onRefreshLink,
                         onCancelDownload = onCancelDownload,
                         onInspectDownload = { item ->
                             inspectedDownloadId = item.id
@@ -286,7 +289,8 @@ fun HyperStreamAppContent(
                             onDismiss = { inspectedDownloadId = null },
                             onTogglePauseResume = { onTogglePauseResume(id) },
                             onRetry = { onRetryDownload(id) },
-                            onDelete = { del -> onCancelDownload(id, del) }
+                            onDelete = { del -> onCancelDownload(id, del) },
+                            onRefreshLink = { newUrl -> onRefreshLink(id, newUrl) }
                         )
                     } else {
                         inspectedDownloadId = null

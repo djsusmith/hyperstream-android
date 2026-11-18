@@ -73,6 +73,7 @@ fun DownloadsScreen(
     onAddDownload: (url: String, connections: Int, category: String, checksum: String?) -> Unit,
     onTogglePauseResume: (Long) -> Unit,
     onRetryDownload: (Long) -> Unit = {},
+    onRefreshLink: (Long, String) -> Unit = { _, _ -> },
     onCancelDownload: (Long, Boolean) -> Unit = { _, _ -> },
     onInspectDownload: (DownloadItemUi) -> Unit,
     modifier: Modifier = Modifier

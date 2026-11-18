@@ -65,8 +65,9 @@ jobs:
         run: |
           git config user.name "HyperStream Upstream Sync Bot"
           git config user.email "actions@github.com"
-          git add upstream/ android/app/src/main/jniLibs/arm64-v8a/libmdm_android.so
-          git commit -m "chore(upstream): sync anefzaoui/misterdownloadmanager @ ${{ steps.check_upstream.outputs.new_sha }}"
+          git add -f upstream/ android/app/src/main/jniLibs/arm64-v8a/libmdm_android.so
+          git diff --cached --quiet || git commit -m "chore(upstream): sync anefzaoui/misterdownloadmanager @ ${{ steps.check_upstream.outputs.new_sha }}"
+          git pull --rebase origin main
           git push origin HEAD:main
 
       - name: Publish Nightly / Bug-Fix Channel Release

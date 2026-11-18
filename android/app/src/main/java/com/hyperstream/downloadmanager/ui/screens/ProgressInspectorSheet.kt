@@ -38,6 +38,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -66,12 +67,59 @@ fun ProgressInspectorSheet(
     onDismiss: () -> Unit,
     onTogglePauseResume: () -> Unit,
     onRetry: () -> Unit,
-    onDelete: (deleteFile: Boolean) -> Unit
+    onDelete: (deleteFile: Boolean) -> Unit,
+    onRefreshLink: ((String) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var alsoDeleteFromStorage by remember { mutableStateOf(true) }
+    var showRefreshLinkDialog by remember { mutableStateOf(false) }
+    var refreshUrlInput by remember(item.url) { mutableStateOf(item.url) }
+
+    if (showRefreshLinkDialog) {
+        AlertDialog(
+            onDismissRequest = { showRefreshLinkDialog = false },
+            icon = { Icon(Icons.Default.Refresh, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+            title = { Text("Refresh Download Link", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Update expired streaming or CDN tokens (YouTube, TikTok, 1DM-style) and seamlessly resume existing chunks.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = refreshUrlInput,
+                        onValueChange = { refreshUrlInput = it },
+                        label = { Text("New Download URL") },
+                        singleLine = false,
+                        maxLines = 4,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val trimmed = refreshUrlInput.trim()
+                        if (trimmed.isNotBlank()) {
+                            onRefreshLink?.invoke(trimmed)
+                            showRefreshLinkDialog = false
+                            onDismiss()
+                        }
+                    }
+                ) {
+                    Text("Refresh & Resume")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRefreshLinkDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     if (showDeleteConfirmDialog) {
         AlertDialog(
@@ -337,6 +385,15 @@ fun ProgressInspectorSheet(
                         Spacer(Modifier.width(6.dp))
                         Text("Retry Download")
                     }
+                    if (onRefreshLink != null) {
+                        OutlinedButton(
+                            onClick = { showRefreshLinkDialog = true }
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Refresh Link")
+                        }
+                    }
                 } else {
                     Button(
                         onClick = onTogglePauseResume,
@@ -350,6 +407,15 @@ fun ProgressInspectorSheet(
                         Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
                         Text(if (item.status == "Downloading") "Pause" else "Resume")
+                    }
+                    if (item.status == "Paused" && onRefreshLink != null) {
+                        OutlinedButton(
+                            onClick = { showRefreshLinkDialog = true }
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Refresh Link")
+                        }
                     }
                 }
 

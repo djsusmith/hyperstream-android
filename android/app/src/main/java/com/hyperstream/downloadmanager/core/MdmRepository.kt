@@ -110,6 +110,14 @@ class MdmRepository(
         }.getOrNull() ?: "built-in"
     }
 
+    fun refreshLink(id: Long, newUrl: String) {
+        val trimmed = newUrl.trim()
+        if (trimmed.isNotBlank()) {
+            MdmNative.safeExecuteCommand("""{"op":"refresh_link","id":$id,"new_url":${quote(trimmed)}}""")
+            refreshFromNative()
+        }
+    }
+
     fun retryDownload(id: Long) {
         MdmNative.safeExecuteCommand("""{"op":"retry_download","id":$id}""")
         refreshFromNative()

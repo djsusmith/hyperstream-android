@@ -243,6 +243,26 @@ impl AndroidCoreController {
                 let _ = std::fs::create_dir_all(&save_dir);
                 let save_path = save_dir.join(&inferred_name).to_string_lossy().into_owned();
 
+                if let Some(existing) = st.downloads.iter_mut().find(|d| {
+                    (d.status == "Paused" || d.status == "Failed")
+                        && (d.url == url || d.save_path == save_path)
+                }) {
+                    let existing_id = existing.id;
+                    update_resume_state_url(&existing.save_path, &url);
+                    existing.url = url;
+                    existing.error_message = None;
+                    existing.status = "Downloading".to_string();
+                    self.persist_locked(&st);
+                    drop(st);
+                    self.spawn_engine_download(existing_id);
+                    return Ok(serde_json::json!({
+                        "ok": true,
+                        "id": existing_id,
+                        "status": "Downloading",
+                        "refreshed_existing": true
+                    }).to_string());
+                }
+
                 let queue_name = queue.unwrap_or_else(|| "Main".to_string());
                 let should_start = start_immediately.unwrap_or(queue_name != "Overnight");
                 let status = if should_start {
@@ -332,12 +352,22 @@ impl AndroidCoreController {
             }
             ControllerCommand::RefreshLink { id, new_url } => {
                 let mut st = self.state.lock().unwrap();
+                let mut should_resume = false;
                 if let Some(d) = st.downloads.iter_mut().find(|d| d.id == id) {
+                    update_resume_state_url(&d.save_path, &new_url);
                     d.url = new_url;
                     d.error_message = None;
+                    if d.status == "Paused" || d.status == "Failed" {
+                        d.status = "Downloading".to_string();
+                        should_resume = true;
+                    }
                 }
                 self.persist_locked(&st);
-                Ok(serde_json::json!({ "ok": true, "id": id }).to_string())
+                drop(st);
+                if should_resume {
+                    self.spawn_engine_download(id);
+                }
+                Ok(serde_json::json!({ "ok": true, "id": id, "resumed": should_resume }).to_string())
             }
             ControllerCommand::AddTorrent { source, sequential } => {
                 let mut st = self.state.lock().unwrap();
@@ -824,7 +854,20 @@ impl AndroidCoreController {
                 dest: mdm_engine::Destination::File(PathBuf::from(&effective_save_path)),
             };
 
-            let dl = mdm_engine::Download::start(req, opts);
+            let dl = {
+                let dest_path = std::path::PathBuf::from(&effective_save_path);
+                let st_file = mdm_engine::state::state_path(&dest_path);
+                let part_file = mdm_engine::naming::part_path(&dest_path);
+                if st_file.exists() && part_file.exists() {
+                    update_resume_state_url(&effective_save_path, &effective_url);
+                    let resume_headers = req.headers.clone();
+                    let resume_opts = opts.clone();
+                    mdm_engine::Download::resume(st_file, resume_headers, resume_opts)
+                        .unwrap_or_else(|_| mdm_engine::Download::start(req, opts))
+                } else {
+                    mdm_engine::Download::start(req, opts)
+                }
+            };
             let mut prev_bytes = 0u64;
             let mut prev_tick = std::time::Instant::now();
 
@@ -1064,4 +1107,20 @@ fn default_queues() -> Vec<QueueDto> {
             item_ids: Vec::new(),
         },
     ]
+}
+
+fn update_resume_state_url(save_path: &str, new_url: &str) {
+    let dest = std::path::PathBuf::from(save_path);
+    let st_path = mdm_engine::state::state_path(&dest);
+    if st_path.exists() {
+        if let Ok(mut saved) = mdm_engine::state::ResumeState::load(&st_path) {
+            if let Ok(parsed) = reqwest::Url::parse(new_url) {
+                if saved.url != parsed {
+                    saved.validators.etag = None;
+                }
+                saved.url = parsed;
+                let _ = saved.write(&st_path);
+            }
+        }
+    }
 }
