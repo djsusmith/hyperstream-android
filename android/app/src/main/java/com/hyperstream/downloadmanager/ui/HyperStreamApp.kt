@@ -452,6 +452,13 @@ fun HyperStreamAppContent(
                         onStartDownload = { url, conns, cat, _ ->
                             onAddDownload(url, null, conns, cat)
                             selectedTab = 0
+                        },
+                        onStartDownloadWithFileName = { url, fileName, conns, cat ->
+                            onAddDownload(url, fileName, conns, cat)
+                            selectedTab = 0
+                        },
+                        onOpenFormatPicker = { url ->
+                            activePickerUrl = url
                         }
                     )
                 }
