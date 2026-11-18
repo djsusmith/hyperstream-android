@@ -90,9 +90,12 @@ Get the official, production-signed release APK directly from GitHub:
 - **Package Installer Integration:** Directly triggers Android's native APK Package Installer for downloaded applications and updates.
 - **Safe Permanent Deletion Dialog:** Tapping the delete button prompts an explicit confirmation dialog with an *"Also permanently delete file from storage"* safeguard—preventing accidental data loss and thoroughly purging leftover `.mdm.part` files.
 
-### 🎨 5. Obsidian OLED Flagship Design
-- **Tailored for High-Refresh OLED Displays:** Crafted with deep Obsidian black (`#07080C`), elevated card darks (`#0E1017`), Radiant Indigo (`#818CF8`), and Sky Blue (`#38BDF8`) accents.
-- **128-Connection Waterfall Visualizer:** Live segment progress bar renders all active worker connections, byte ranges, individual transfer rates, and connection states.
+### 🎨 5. Royal Speedometer UI, A2UI Engine & Obsidian OLED
+- **Royal Speedometer Hero Card (`A2uiSurfaceRenderer`):** Collapsible Royal Blue hero card with animated speedometer dial, 1-tap toggle to a 128-thread live connection map, bottom speed sparkline, `Pause all` / `Resume` pill, and `Active / Queued / Done` glassmorphic tiles.
+- **Auto-Clipboard & Live Server Probe (`NewDownloadSheet`):** Tapping **`+`** automatically detects a copied URL in your clipboard and probes the remote server (or social video extractor) for the real filename, file size, file type badge, and `Server supports resuming` status.
+- **Smart Link Refresh with Built-in Browser Catcher:** Renew expired CDN tokens by pasting a link or opening the embedded browser right inside the **Refresh Link** dialog—tap Download on the source page and HyperStream catches the new URL and resumes from your saved byte offset.
+- **One-Tap In-App Self-Updater (`ApkSelfUpdater`):** Downloads new releases inside the app with a live progress bar, verifies the GitHub SHA-256 digest and package signature, and launches the Android Package Installer.
+- **Royal Light & Obsidian Dark Themes:** Seamless Light and Dark mode support tailored for high-refresh displays.
 
 ### 🔋 6. Non-Stop Background Service & Shizuku Power
 - **Partial WakeLock & High-Perf Wi-Fi Lock:** `HyperStreamDownloadService` holds a foreground service with `PowerManager.PARTIAL_WAKE_LOCK` and `WifiManager.WIFI_MODE_FULL_HIGH_PERF`, ensuring multi-gigabyte transfers finish uninterrupted even when your phone's screen is locked.
@@ -210,7 +213,8 @@ You can switch between update channels at any time inside **Settings ➔ Update 
 ### v0.6.3 — 2026-11-18
 - 🎨 **All-New Royal Speedometer UI & A2UI Engine** — collapsible Royal Blue hero speedometer card with live sparkline, dial/128-thread map toggle, and `Active / Queued / Done` tiles powered by a native Jetpack Compose A2UI surface renderer
 - 🔘 **Circular Progress Ring Cards** — file-type squircle badges, live speed pills, and circular progress ring Pause/Resume/Open buttons
-- 📥 **New Download Bottom Sheet** — inline Paste button, live file preview, segmented `16 / 32 / 64 / 128` connections selector, and folder preview
+- 📥 **Auto-Clipboard & Live Server Probe on `+`** — tapping `+` automatically detects a copied URL and probes remote headers (or the social video extractor) for the exact filename, file size, file type, and byte-range resume support
+- 🌐 **Built-in Browser Link Catcher inside Refresh Link** — renew expired download links by pasting a URL or opening the embedded browser inside **Refresh Link** to catch the fresh download link and resume from your saved percentage
 - 🔍 **Quick Search & Floating Pill Navigation** — top-bar search toggle, `+` New Download button, and floating pill bottom bar with active badge
 - 🌗 **Crisp Royal Light & Obsidian Dark Themes** — seamless Light/Dark mode support
 
