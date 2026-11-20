@@ -1,0 +1,9 @@
+/home/runner/work/hyperstream-android/hyperstream-android/upstream/target/aarch64-linux-android/release/build/iana-time-zone/00968399f86f9e19/out/iana_time_zone-00968399f86f9e19.d: /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iana-time-zone-0.1.65/src/lib.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iana-time-zone-0.1.65/src/ffi_utils.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iana-time-zone-0.1.65/src/tz_android.rs
+
+/home/runner/work/hyperstream-android/hyperstream-android/upstream/target/aarch64-linux-android/release/build/iana-time-zone/00968399f86f9e19/out/libiana_time_zone-00968399f86f9e19.rlib: /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iana-time-zone-0.1.65/src/lib.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iana-time-zone-0.1.65/src/ffi_utils.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iana-time-zone-0.1.65/src/tz_android.rs
+
+/home/runner/work/hyperstream-android/hyperstream-android/upstream/target/aarch64-linux-android/release/build/iana-time-zone/00968399f86f9e19/out/libiana_time_zone-00968399f86f9e19.rmeta: /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iana-time-zone-0.1.65/src/lib.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iana-time-zone-0.1.65/src/ffi_utils.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iana-time-zone-0.1.65/src/tz_android.rs
+
+/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iana-time-zone-0.1.65/src/lib.rs:
+/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iana-time-zone-0.1.65/src/ffi_utils.rs:
+/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iana-time-zone-0.1.65/src/tz_android.rs:

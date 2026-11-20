@@ -32,66 +32,28 @@ pub fn system_has_roots() -> bool {
     if FOUND.load(Ordering::Relaxed) {
         return true;
     }
-    let found = is_platform_verifier_ok()
-        || !webpki_root_certs::TLS_SERVER_ROOT_CERTS.is_empty();
+    let found = rustls_platform_verifier::Verifier::new(provider()).is_ok();
     if found {
         FOUND.store(true, Ordering::Relaxed);
     }
     found
 }
 
-fn is_platform_verifier_ok() -> bool {
-    #[cfg(target_os = "android")]
-    {
-        false
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        std::panic::catch_unwind(|| {
-            rustls_platform_verifier::Verifier::new(provider()).is_ok()
-        })
-        .unwrap_or(false)
-    }
-}
-
 /// `builder` with the TLS it can have here: reqwest's own (the system's verifier) when the
-/// system has certificates, else a fallback root store (`webpki-root-certs` + native certs) on
-/// platforms like Android where `rustls-platform-verifier` is uninitialized, or one whose every
-/// secure connection fails with [`NO_ROOTS`] when no roots exist at all.
+/// system has certificates, else one whose every secure connection fails with [`NO_ROOTS`]
+/// (reqwest's would refuse to build the client at all, plain HTTP included). MDM's own clients
+/// get it through `net::bind_client`; the torrent session's (trackers, UPnP) through librqbit's
+/// `SessionOptions::configure_http_client` (mdm-torrent).
 pub fn configure(builder: reqwest::ClientBuilder) -> reqwest::ClientBuilder {
     configure_with(builder, system_has_roots())
 }
 
 fn configure_with(builder: reqwest::ClientBuilder, has_roots: bool) -> reqwest::ClientBuilder {
     if has_roots {
-        if is_platform_verifier_ok() {
-            builder
-        } else {
-            builder.tls_backend_preconfigured(fallback_roots_config(&[]))
-        }
+        builder
     } else {
         builder.tls_backend_preconfigured(no_roots_config())
     }
-}
-
-/// A client configuration backed by `webpki-root-certs` and any readable native/extra certificates
-/// (used on Android when the Java platform verifier is not hosted, or on minimal userspaces).
-pub(crate) fn fallback_roots_config(extra: &[Vec<u8>]) -> rustls::ClientConfig {
-    let mut root_store = rustls::RootCertStore::empty();
-    for cert in webpki_root_certs::TLS_SERVER_ROOT_CERTS {
-        let _ = root_store.add(cert.clone());
-    }
-    for cert in rustls_native_certs::load_native_certs().certs {
-        let _ = root_store.add(cert);
-    }
-    for cert in extra {
-        let _ = root_store.add(CertificateDer::from(cert.clone()));
-    }
-    rustls::ClientConfig::builder_with_provider(provider())
-        .with_safe_default_protocol_versions()
-        .expect("the default protocol versions are supported")
-        .with_root_certificates(root_store)
-        .with_no_client_auth()
 }
 
 /// A client configuration for a system without certificates: every server is refused.
@@ -258,7 +220,7 @@ mod tests {
 
     /// A client of a system without certificates.
     fn without_roots() -> reqwest::Client {
-        configure_with(reqwest::Client::builder().no_proxy(), false)
+        configure_with(reqwest::Client::builder(), false)
             .build()
             .expect("a client builds without certificates")
     }
@@ -306,7 +268,6 @@ mod tests {
     fn trusting(ca: Vec<u8>) -> reqwest::Client {
         let config = crate::ftp::client_config(&[ca]).unwrap();
         reqwest::Client::builder()
-            .no_proxy()
             .tls_backend_preconfigured(config)
             .build()
             .unwrap()

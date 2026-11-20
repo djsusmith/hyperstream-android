@@ -3,7 +3,8 @@
 //! (Codeberg), its `SHA256SUMS` checked against its author's OpenPGP key (pinned in
 //! `keys/gallery-dl.asc`), the program against that list, kept in `tools/gallery-dl/<version>/`
 //! with the previous version, never older; or the person's own copy (`chosen`). It runs in the
-//! same job as yt-dlp does (`proc::spawn`), so Stop and MDM's end take it and all it started.
+//! same kind of job (Windows) or process group (Linux, macOS) as yt-dlp does (`proc::spawn`), so
+//! Stop and MDM's end take it and all it started.
 //!
 //! A download is a folder: gallery-dl prints each file it saves (one path a line, `# path` for
 //! one already there), and skips what is already there when started again, so a gallery started
@@ -16,7 +17,7 @@
 //! headers of its own, a sign-in). A gallery-dl too old to list them (before 1.32) downloads them all
 //! itself, as before.
 
-use std::io::{BufRead, BufReader};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
@@ -128,18 +129,15 @@ pub fn too_old(version: &str) -> bool {
     release(version).is_some_and(|have| Some(have) < release(OLDEST))
 }
 
-/// The gallery-dl to use: the person's own (`chosen`), else MDM's install in `dir`; on Linux
-/// and macOS, else the system's (#571, as yt-dlp's: a package manager's or Homebrew's, kept up
-/// to date by it). A chosen one too old for MDM ([`too_old`], chosen before #236 checked) is
-/// passed over; [`chosen_too_old`] names it, for the Helpers window to say so.
+/// The gallery-dl to use: the person's own (`chosen`), else MDM's install in `dir`; else the
+/// system's (#571, as yt-dlp's: a package manager's, Homebrew's or pip's, kept up to date by
+/// it). A chosen one too old for MDM ([`too_old`], chosen before #236 checked) is passed over;
+/// [`chosen_too_old`] names it, for the Helpers window to say so.
 pub fn installed(dir: &Path) -> Option<Installed> {
     let own = chosen::chosen(dir, chosen::Helper::GalleryDl)
         .filter(|mine| !too_old(&mine.version))
         .or_else(|| own(dir));
-    #[cfg(unix)]
-    return own.or_else(|| crate::system::installed("gallery-dl"));
-    #[cfg(not(unix))]
-    own
+    own.or_else(|| crate::system::installed("gallery-dl"))
 }
 
 /// The person's own gallery-dl when it is too old for MDM, so passed over.
@@ -287,10 +285,24 @@ struct Shared {
     there: u64,
     /// The files saved this run (at most `KEEP_PATHS`).
     files: Vec<PathBuf>,
-    /// Every file gallery-dl reported for this gallery (`Saved` + `There`, at most `KEEP_PATHS`).
+    /// Every file gallery-dl reported for this gallery (`Saved` + `There`, at most `KEEP_PATHS`),
+    /// each once, in the order reported.
     known: Vec<PathBuf>,
+    /// `known`'s paths, to tell one already listed at once: a gallery's lines number up to
+    /// `KEEP_PATHS`, so searching `known` for each would take time squared, with the lock held.
+    known_set: HashSet<PathBuf>,
     /// The files MDM's engine saved this run (#769), counted among gallery-dl's `There`.
     by_engine: u64,
+}
+
+impl Shared {
+    /// Lists `p` among `known`, once.
+    fn know(&mut self, p: PathBuf) {
+        if self.known.len() < KEEP_PATHS && !self.known_set.contains(&p) {
+            self.known_set.insert(p.clone());
+            self.known.push(p);
+        }
+    }
 }
 
 /// MDM's engine for a gallery's files (#769).
@@ -340,17 +352,15 @@ impl ByEngine<'_> {
             }
         };
         let mut files: Vec<(url::Url, PathBuf)> = Vec::new();
-        let mut reader = BufReader::new(stdout);
-        let mut buf = Vec::new();
-        loop {
-            buf.clear();
-            match std::io::Read::take(&mut reader, 64 * 1024).read_until(b'\n', &mut buf) {
-                Ok(0) | Err(_) => break,
-                Ok(_) => {}
-            }
+        // To gallery-dl's end (#1521: not to that of whatever it started).
+        let mut output = proc::Output::read(stdout, MAX_LINE);
+        while let Some(buf) = output.next_line(|| proc::ended(child)) {
             if let Some(f) = listed(&String::from_utf8_lossy(&buf), self.folder) {
                 files.push(f);
             }
+        }
+        if output.held_open() {
+            proc::note_held_open("gallery-dl");
         }
         // Its end, and its words if it listed nothing.
         let failure = {
@@ -406,6 +416,7 @@ impl ByEngine<'_> {
             token.clone(),
             pieces_shared.clone(),
             relist,
+            None,
         ));
         let mut cancelled = false;
         while !task.is_finished() {
@@ -464,6 +475,8 @@ impl Default for Progress {
             helper: None,
             merging: None,
             merge_failed: None,
+            recorded: 0,
+            recording: false,
         }
     }
 }
@@ -606,7 +619,12 @@ impl GalleryJob {
                     }
                 }
             };
-            read(stdout, &sh);
+            // To gallery-dl's end (#1521: not to that of whatever it started).
+            let mut output = proc::Output::read(stdout, MAX_LINE);
+            read(|| output.next_line(|| proc::ended(&ch)), &sh);
+            if output.held_open() {
+                proc::note_held_open("gallery-dl");
+            }
             finish(&sh, &ch, folder, saved.as_ref());
         });
         Ok(GalleryJob {
@@ -676,7 +694,8 @@ impl Drop for GalleryJob {
 
 /// The browser's context (`FromBrowser::args`, made for yt-dlp) as gallery-dl takes it: its
 /// cookies, and its User-Agent or MDM's (`--user-agent`, or `-o user-agent=…` before 1.24); no
-/// Referer or Origin (`--add-header`), which gallery-dl has no option for.
+/// Referer, Origin (`--add-header`), or yt-dlp's browser-store opt-out, which gallery-dl has no
+/// option for (it never reads Options' video cookie store).
 fn browser_args(theirs: Vec<String>, accepts: Accepts) -> Vec<String> {
     let mut out = Vec::new();
     let mut agent = None;
@@ -686,6 +705,7 @@ fn browser_args(theirs: Vec<String>, accepts: Accepts) -> Vec<String> {
             "--referer" | "--add-header" => {
                 theirs.next();
             }
+            "--no-cookies-from-browser" => {}
             "--user-agent" => agent = theirs.next(),
             "--cookies" => {
                 out.push(a);
@@ -719,18 +739,14 @@ fn parse_line(line: &str) -> Option<Line> {
     p.is_absolute().then(|| Line::Saved(p.to_owned()))
 }
 
-/// Count gallery-dl's files as it prints them. Lines are read whole but kept short: a path is
-/// at most a few thousand bytes, and a longer line is no path.
-fn read(stdout: impl std::io::Read, shared: &Mutex<Shared>) {
+/// The longest piece of a gallery-dl line read as one ([`proc::Output`]): a path is at most a
+/// few thousand bytes, and a longer line is no path.
+const MAX_LINE: usize = 64 * 1024;
+
+/// Count gallery-dl's files as it prints them (`next`: its next line, [`MAX_LINE`] at most).
+fn read(mut next: impl FnMut() -> Option<Vec<u8>>, shared: &Mutex<Shared>) {
     let started = Instant::now();
-    let mut reader = BufReader::new(stdout);
-    let mut buf = Vec::new();
-    loop {
-        buf.clear();
-        match std::io::Read::take(&mut reader, 64 * 1024).read_until(b'\n', &mut buf) {
-            Ok(0) | Err(_) => return,
-            Ok(_) => {}
-        }
+    while let Some(buf) = next() {
         let text = String::from_utf8_lossy(&buf);
         let Some(line) = parse_line(&text) else {
             continue;
@@ -743,15 +759,11 @@ fn read(stdout: impl std::io::Read, shared: &Mutex<Shared>) {
                 if sh.files.len() < KEEP_PATHS {
                     sh.files.push(p.clone());
                 }
-                if sh.known.len() < KEEP_PATHS {
-                    sh.known.push(p);
-                }
+                sh.know(p);
             }
             Line::There(p) => {
                 sh.there += 1;
-                if sh.known.len() < KEEP_PATHS && !sh.known.contains(&p) {
-                    sh.known.push(p);
-                }
+                sh.know(p);
             }
         }
         let secs = started.elapsed().as_secs_f64().max(0.5);
@@ -825,6 +837,56 @@ fn finish(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `text` read as gallery-dl's output is ([`proc::Output`]).
+    fn read_text(text: impl Into<Vec<u8>>, shared: &Mutex<Shared>) {
+        let mut output = proc::Output::read(std::io::Cursor::new(text.into()), MAX_LINE);
+        read(|| output.next_line(|| false), shared);
+    }
+
+    /// A gallery whose files are all there already (every file MDM's engine saved comes back so,
+    /// #769) is read in time linear in its files: each line's path is told from those listed at
+    /// once, not searched for among them, with the lock `progress` waits on held.
+    #[test]
+    fn a_gallery_already_there_is_read_in_linear_time() {
+        let lines = |n: usize| {
+            let mut text = String::new();
+            for i in 0..n {
+                text.push_str(&format!(
+                    "# /gallery/image-{i:09}.jpg
+"
+                ));
+            }
+            text.into_bytes()
+        };
+        mdm_labserver::growth::assert_linear(2_000, lines, |text| {
+            let shared = Mutex::new(Shared::default());
+            read_text(text, &shared);
+            let sh = shared.into_inner().unwrap();
+            assert_eq!(sh.there as usize, sh.known.len());
+            sh.known.len()
+        });
+        // Each path listed once, in the order reported, a file saved as well as there included.
+        let shared = Mutex::new(Shared::default());
+        let saved = std::env::temp_dir().join("mdm-gallery-known-once.jpg");
+        let text = format!(
+            "# /g/a.jpg
+# /g/b.jpg
+# /g/a.jpg
+{}
+{}
+",
+            saved.display(),
+            saved.display()
+        );
+        read_text(text, &shared);
+        let sh = shared.into_inner().unwrap();
+        assert_eq!((sh.there, sh.saved), (3, 2));
+        assert_eq!(
+            sh.known,
+            [PathBuf::from("/g/a.jpg"), PathBuf::from("/g/b.jpg"), saved]
+        );
+    }
 
     const SUMS: &[u8] = include_bytes!("../tests/fixtures/gallery-dl-SHA256SUMS");
     const SIG: &[u8] = include_bytes!("../tests/fixtures/gallery-dl-SHA256SUMS.sig");
@@ -960,6 +1022,12 @@ mod tests {
             ["--cookies", "/c.txt", "-o", "user-agent=Firefox/150"]
         );
         assert_eq!(browser_args(Vec::new(), new), ["--user-agent", USER_AGENT]);
+        let private = FromBrowser {
+            private: true,
+            ..Default::default()
+        };
+        let (args, _) = private.args("https://x.test/g").unwrap();
+        assert_eq!(browser_args(args, new), ["--user-agent", USER_AGENT]);
         assert_eq!(
             browser_args(Vec::new(), old),
             ["-o".to_owned(), format!("user-agent={USER_AGENT}")]
@@ -1026,7 +1094,7 @@ mod tests {
         text.push_str(&"x".repeat(200_000));
         text.push('\n');
         let shared = Mutex::new(Shared::default());
-        read(text.as_bytes(), &shared);
+        read_text(text, &shared);
         let sh = shared.lock().unwrap();
         assert_eq!((sh.saved, sh.there), (5000, 5000));
         assert_eq!(sh.progress.downloaded, 5_000_000);
