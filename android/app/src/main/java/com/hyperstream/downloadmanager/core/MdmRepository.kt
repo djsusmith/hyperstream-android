@@ -1,8 +1,12 @@
 package com.hyperstream.downloadmanager.core
 
+import com.hyperstream.downloadmanager.browser.ExternalDownloadRequest
+import com.hyperstream.downloadmanager.browser.YouTubeWebViewExtractor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,6 +40,14 @@ class MdmRepository(
 
     fun setPendingSharedUrl(url: String?) {
         _pendingSharedUrl.value = url
+    }
+
+    /** External download handoff from browsers (Vivaldi, Quetta, etc.) with optional filename & headers. */
+    private val _pendingExternalDownload = MutableStateFlow<ExternalDownloadRequest?>(null)
+    val pendingExternalDownload: StateFlow<ExternalDownloadRequest?> = _pendingExternalDownload.asStateFlow()
+
+    fun setPendingExternalDownload(request: ExternalDownloadRequest?) {
+        _pendingExternalDownload.value = request
     }
 
     init {
@@ -84,20 +96,68 @@ class MdmRepository(
         category: String = "General",
         connections: Int = 128,
         queue: String = "Main",
-        checksumExpected: String? = null
+        checksumExpected: String? = null,
+        userAgent: String? = null,
+        referer: String? = null,
+        cookie: String? = null
     ) {
         val clamped = connections.coerceIn(1, 128)
         val platform = com.hyperstream.downloadmanager.browser.LinkParser.detectPlatformName(url)
         MetaPixelTracker.trackStartDownload(fileName, platform, category, clamped)
         val nameField = fileName?.takeIf { it.isNotBlank() }
             ?.let { ""","file_name":${quote(it)}""" } ?: ""
-        val cmd = """{"op":"add_download","url":${quote(url)},"connections":$clamped,"category":${quote(category)},"queue":${quote(queue)},"start_immediately":${queue != "Overnight"}$nameField}"""
+        val uaField = userAgent?.takeIf { it.isNotBlank() }
+            ?.let { ""","user_agent":${quote(it)}""" } ?: ""
+        val refField = referer?.takeIf { it.isNotBlank() }
+            ?.let { ""","referer":${quote(it)}""" } ?: ""
+        val cookieField = cookie?.takeIf { it.isNotBlank() }
+            ?.let { ""","cookie":${quote(it)}""" } ?: ""
+        val cmd = """{"op":"add_download","url":${quote(url)},"connections":$clamped,"category":${quote(category)},"queue":${quote(queue)},"start_immediately":${queue != "Overnight"}$nameField$uaField$refField$cookieField}"""
         MdmNative.safeExecuteCommand(cmd)
         refreshFromNative()
     }
 
     /** Probes a page/media URL for downloadable variants (video resolutions, no-watermark, MP3 bitrates). */
     suspend fun probeVideo(url: String): ProbeResultUi = withContext(Dispatchers.IO) {
+        val ytVideoId = if (YouTubeWebViewExtractor.hasHost()) {
+            runCatching { YouTubeWebViewExtractor.extractVideoId(url) }.getOrNull()
+        } else {
+            null
+        }
+        if (ytVideoId != null) {
+            return@withContext coroutineScope {
+                val webDeferred = async { runCatching { YouTubeWebViewExtractor.extract(ytVideoId) }.getOrNull() }
+                val nativeDeferred = async {
+                    val raw = MdmNative.safeExecuteCommand("""{"op":"probe_video","url":${quote(url)}}""")
+                    parseProbeResultJson(raw)
+                }
+                val webRes = webDeferred.await()
+                val nativeRes = nativeDeferred.await()
+                if (webRes != null && webRes.streams.isNotEmpty()) {
+                    // Use the verified WebView progressive stream(s) so downloads complete 100%
+                    // without hitting YouTube's 60-second GVS 403 cutoff on un-PO-tokenized InnerTube streams.
+                    val primary = webRes.streams.first()
+                    val audioFallback = listOf(
+                        primary.copy(
+                            itag = primary.itag + 1000,
+                            label = "Audio Extract • Verified Stream (M4A)",
+                            quality = "Audio",
+                            formatKind = "audio",
+                            ext = "m4a",
+                            category = "Music",
+                            fileName = primary.fileName.substringBeforeLast('.') + ".m4a"
+                        )
+                    )
+                    webRes.copy(
+                        title = nativeRes.title.ifBlank { webRes.title },
+                        author = nativeRes.author.ifBlank { webRes.author },
+                        streams = webRes.streams + audioFallback
+                    )
+                } else {
+                    nativeRes
+                }
+            }
+        }
         val raw = MdmNative.safeExecuteCommand("""{"op":"probe_video","url":${quote(url)}}""")
         parseProbeResultJson(raw)
     }

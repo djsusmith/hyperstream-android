@@ -14,6 +14,17 @@ data class ParsedLinkTarget(
     val suggestedName: String? = null
 )
 
+data class ExternalDownloadRequest(
+    val url: String,
+    val kind: LinkKind,
+    val fileName: String? = null,
+    val mimeType: String? = null,
+    val userAgent: String? = null,
+    val referer: String? = null,
+    val cookie: String? = null,
+    val isExternalBrowserHandoff: Boolean = false
+)
+
 object LinkParser {
     private val magnetRegex = Regex("""magnet:\?xt=urn:btih:[A-Za-z0-9%&=\-._~+]+""", RegexOption.IGNORE_CASE)
     private val urlRegex = Regex("""(?:https?|ftps?)://[^\s"'<>]+""", RegexOption.IGNORE_CASE)
@@ -135,5 +146,80 @@ object LinkParser {
         }
         val target = extractDownloadableTarget(url) ?: return false
         return target.kind == LinkKind.DIRECT_FILE || target.kind == LinkKind.TORRENT_FILE || target.kind == LinkKind.MAGNET
+    }
+
+    /**
+     * Parses a download handoff Intent from browsers with External Download Manager support
+     * (Vivaldi, Quetta, Firefox, Opera, ADM/1DM protocol) or standard Share/Open-with intents.
+     */
+    fun extractExternalDownloadRequest(intent: android.content.Intent?): ExternalDownloadRequest? {
+        if (intent == null) return null
+        val raw = extractRawTextFromIntent(intent)
+        val target = extractDownloadableTarget(raw) ?: return null
+
+        val mime = intent.type?.takeIf {
+            it.isNotBlank() && it != "*/*" && !it.startsWith("text/plain", ignoreCase = true)
+        }
+
+        val extras = intent.extras
+        fun firstExtra(vararg keys: String): String? {
+            if (extras == null) return null
+            for (k in keys) {
+                val v = extras.get(k)?.toString()?.trim()
+                if (!v.isNullOrBlank()) return v
+            }
+            return null
+        }
+
+        val browserHeaders = extras?.getBundle("com.android.browser.headers")
+        fun headerExtra(vararg keys: String): String? {
+            if (browserHeaders != null) {
+                for (k in keys) {
+                    val v = browserHeaders.getString(k)?.trim()
+                    if (!v.isNullOrBlank()) return v
+                }
+                for (bk in browserHeaders.keySet()) {
+                    if (keys.any { it.equals(bk, ignoreCase = true) }) {
+                        val v = browserHeaders.getString(bk)?.trim()
+                        if (!v.isNullOrBlank()) return v
+                    }
+                }
+            }
+            return firstExtra(*keys)
+        }
+
+        val suggestedFileName = firstExtra(
+            android.content.Intent.EXTRA_TITLE,
+            "filename",
+            "file_name",
+            "extra_filename",
+            "name",
+            "com.dv.adm.EXTRA_FILENAME"
+        )?.takeIf { !it.startsWith("http://", true) && !it.startsWith("https://", true) }
+            ?: target.suggestedName
+
+        val userAgent = headerExtra("User-Agent", "user_agent", "useragent", "HTTP_USER_AGENT")
+        val referer = headerExtra(
+            "Referer",
+            "referer",
+            android.content.Intent.EXTRA_REFERRER_NAME,
+            android.content.Intent.EXTRA_REFERRER
+        )
+        val cookie = headerExtra("Cookie", "cookie", "cookies")
+
+        val isBrowserHandoff = intent.action == android.content.Intent.ACTION_VIEW &&
+            (mime != null || userAgent != null || referer != null || cookie != null ||
+                target.kind == LinkKind.DIRECT_FILE)
+
+        return ExternalDownloadRequest(
+            url = target.uri,
+            kind = target.kind,
+            fileName = suggestedFileName,
+            mimeType = mime,
+            userAgent = userAgent,
+            referer = referer,
+            cookie = cookie,
+            isExternalBrowserHandoff = isBrowserHandoff
+        )
     }
 }

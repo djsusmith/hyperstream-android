@@ -50,7 +50,7 @@ sealed class UpdateCheckResult {
 
 object UpdateChannelManager {
     const val GITHUB_RELEASES_API = "https://api.github.com/repos/djsusmith/hyperstream-android/releases"
-    const val DEFAULT_FALLBACK_APK = "https://gh-proxy.com/https://github.com/djsusmith/hyperstream-android/releases/download/v0.6.3/HyperStream-v0.6.3-arm64.apk"
+    const val DEFAULT_FALLBACK_APK = "https://gh-proxy.com/https://github.com/djsusmith/hyperstream-android/releases/download/v0.6.4/HyperStream-v0.6.4-arm64.apk"
 
     /**
      * Resolves nearest high-speed CDN mirror for GitHub releases to bypass slow S3 routing.
@@ -81,7 +81,8 @@ object UpdateChannelManager {
      */
     suspend fun checkForUpdates(
         currentVersion: String = com.hyperstream.downloadmanager.BuildConfig.VERSION_NAME,
-        channel: UpdateChannel = UpdateChannel.STABLE
+        channel: UpdateChannel = UpdateChannel.STABLE,
+        currentUpstreamCommit: String = com.hyperstream.downloadmanager.BuildConfig.UPSTREAM_COMMIT
     ): UpdateCheckResult = withContext(Dispatchers.IO) {
         try {
             val url = URL(GITHUB_RELEASES_API)
@@ -180,23 +181,56 @@ object UpdateChannelManager {
                     }
                 }
                 UpdateChannel.NIGHTLY_BUGFIX -> {
-                    val latestNightly = parsedList.firstOrNull { it.prerelease || it.tagName == "nightly" }
-                        ?: parsedList.firstOrNull()
-
+                    val latestNightly = parsedList.firstOrNull { it.prerelease || it.tagName.equals("nightly", ignoreCase = true) }
                     if (latestNightly != null) {
-                        UpdateCheckResult.UpdateAvailable(
-                            version = latestNightly.tagName,
-                            tagName = latestNightly.tagName,
-                            releaseName = latestNightly.name,
-                            apkUrl = latestNightly.apkDownloadUrl,
-                            releaseNotes = latestNightly.releaseNotes,
-                            sizeBytes = latestNightly.sizeBytes,
-                            isPrerelease = true,
-                            sha256 = latestNightly.sha256
-                        )
-                    } else {
-                        UpdateCheckResult.UpToDate(currentVersion, currentTimeStr())
+                        val remoteCommit = extractUpstreamCommit(latestNightly.name, latestNightly.releaseNotes)
+                        val cleanLocalCommit = currentUpstreamCommit.trim().lowercase()
+                        val cleanRemoteCommit = remoteCommit.trim().lowercase()
+                        val commitsMatch = cleanLocalCommit.length >= 7 &&
+                            cleanRemoteCommit.length >= 7 &&
+                            (cleanLocalCommit.startsWith(cleanRemoteCommit) || cleanRemoteCommit.startsWith(cleanLocalCommit))
+
+                        val remoteVer = extractAppVersion(latestNightly.name, latestNightly.tagName)
+                        val localSemver = currentVersion.removePrefix("v").trim()
+                        val isNewerNightly = when {
+                            commitsMatch -> false
+                            cleanRemoteCommit.isNotEmpty() -> true
+                            remoteVer != null -> compareSemver(remoteVer, localSemver) > 0
+                            else -> false
+                        }
+                        if (isNewerNightly) {
+                            return@withContext UpdateCheckResult.UpdateAvailable(
+                                version = remoteVer ?: latestNightly.tagName,
+                                tagName = latestNightly.tagName,
+                                releaseName = latestNightly.name,
+                                apkUrl = latestNightly.apkDownloadUrl,
+                                releaseNotes = latestNightly.releaseNotes,
+                                sizeBytes = latestNightly.sizeBytes,
+                                isPrerelease = true,
+                                sha256 = latestNightly.sha256
+                            )
+                        }
                     }
+
+                    // No newer nightly build — check whether a newer stable release is available.
+                    val latestStable = parsedList.firstOrNull { !it.prerelease }
+                    if (latestStable != null) {
+                        val remoteSemver = latestStable.tagName.removePrefix("v").trim()
+                        val localSemver = currentVersion.removePrefix("v").trim()
+                        if (compareSemver(remoteSemver, localSemver) > 0) {
+                            return@withContext UpdateCheckResult.UpdateAvailable(
+                                version = remoteSemver,
+                                tagName = latestStable.tagName,
+                                releaseName = latestStable.name,
+                                apkUrl = latestStable.apkDownloadUrl,
+                                releaseNotes = latestStable.releaseNotes,
+                                sizeBytes = latestStable.sizeBytes,
+                                isPrerelease = false,
+                                sha256 = latestStable.sha256
+                            )
+                        }
+                    }
+                    UpdateCheckResult.UpToDate(currentVersion, currentTimeStr())
                 }
             }
         } catch (e: Exception) {
@@ -236,6 +270,19 @@ object UpdateChannelManager {
             if (va != vb) return va.compareTo(vb)
         }
         return 0
+    }
+
+    internal fun extractUpstreamCommit(releaseName: String, releaseNotes: String): String {
+        val pattern = Regex("""(?:Upstream|commit)\s+([0-9a-fA-F]{7,40})""", RegexOption.IGNORE_CASE)
+        return pattern.find(releaseName)?.groupValues?.getOrNull(1)
+            ?: pattern.find(releaseNotes)?.groupValues?.getOrNull(1)
+            ?: ""
+    }
+
+    internal fun extractAppVersion(releaseName: String, tagName: String): String? {
+        val verPattern = Regex("""v?(\d+\.\d+\.\d+)""")
+        return verPattern.find(tagName)?.groupValues?.getOrNull(1)
+            ?: verPattern.find(releaseName)?.groupValues?.getOrNull(1)
     }
 
     private fun currentTimeStr(): String {

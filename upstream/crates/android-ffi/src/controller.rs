@@ -30,6 +30,12 @@ pub enum ControllerCommand {
         queue: Option<String>,
         checksum_expected: Option<String>,
         start_immediately: Option<bool>,
+        #[serde(default)]
+        user_agent: Option<String>,
+        #[serde(default)]
+        referer: Option<String>,
+        #[serde(default)]
+        cookie: Option<String>,
     },
     PauseDownload {
         id: u64,
@@ -229,6 +235,9 @@ impl AndroidCoreController {
                 queue,
                 checksum_expected,
                 start_immediately,
+                user_agent,
+                referer,
+                cookie,
             } => {
                 let mut st = self.state.lock().unwrap();
                 let id = st.next_id.max(1);
@@ -250,6 +259,15 @@ impl AndroidCoreController {
                     let existing_id = existing.id;
                     update_resume_state_url(&existing.save_path, &url);
                     existing.url = url;
+                    if user_agent.is_some() {
+                        existing.user_agent = user_agent;
+                    }
+                    if referer.is_some() {
+                        existing.referer = referer;
+                    }
+                    if cookie.is_some() {
+                        existing.cookie = cookie;
+                    }
                     existing.error_message = None;
                     existing.status = "Downloading".to_string();
                     self.persist_locked(&st);
@@ -294,6 +312,9 @@ impl AndroidCoreController {
                     checksum_verified: None,
                     error_message: None,
                     segments,
+                    user_agent,
+                    referer,
+                    cookie,
                 };
                 st.downloads.insert(0, item);
                 self.persist_locked(&st);
@@ -743,7 +764,7 @@ impl AndroidCoreController {
     }
 
     fn spawn_engine_download(&self, id: u64) {
-        let (url_str, save_path, max_conns) = {
+        let (url_str, save_path, max_conns, min_split_kb, item_ua, item_referer, item_cookie) = {
             let st = self.state.lock().unwrap();
             let Some(item) = st.downloads.iter().find(|d| d.id == id) else {
                 return;
@@ -751,7 +772,15 @@ impl AndroidCoreController {
             if !url_str_is_network(&item.url) {
                 return;
             }
-            (item.url.clone(), item.save_path.clone(), item.max_connections)
+            (
+                item.url.clone(),
+                item.save_path.clone(),
+                item.max_connections,
+                st.settings.min_split_kb,
+                item.user_agent.clone(),
+                item.referer.clone(),
+                item.cookie.clone(),
+            )
         };
 
         let cancel_token = CancellationToken::new();
@@ -771,7 +800,7 @@ impl AndroidCoreController {
             let mut effective_url = url_str.clone();
             let mut effective_save_path = save_path.clone();
             let rules = crate::extractors::ExtractorRules::load_or_default(&storage_dir);
-            let mut custom_ua: Option<String> = None;
+            let mut custom_ua: Option<String> = item_ua.filter(|s| !s.trim().is_empty());
 
             // Resolve YouTube / TikTok / Instagram / Facebook / Social page URLs automatically
             let needs_resolution = crate::extractors::detect_platform(&effective_url) != "Direct"
@@ -827,30 +856,82 @@ impl AndroidCoreController {
                 }
             }
 
+            let effective_url = if effective_url.contains("googlevideo.com") {
+                crate::extractors::normalize_googlevideo_url(&effective_url)
+            } else {
+                effective_url
+            };
             let Ok(parsed_url) = Url::parse(&effective_url) else {
                 return;
             };
             let mut opts = mdm_engine::Options::default();
+            let is_yt = effective_url.contains("googlevideo.com");
+            let is_social_cdn = effective_url.contains("fbcdn.net")
+                || effective_url.contains("cdninstagram.com")
+                || effective_url.contains("tikwm.com")
+                || effective_url.contains("tiktok");
+
             if let Some(ua) = custom_ua {
-                opts.user_agent = ua;
-            } else if effective_url.contains("googlevideo.com") {
-                if effective_url.contains("c=IOS") {
-                    opts.user_agent = rules.youtube_ios_ua;
-                } else {
-                    opts.user_agent = rules.youtube_android_ua;
-                }
+                opts.speak_as(ua);
+            } else if is_yt {
+                opts.speak_as(crate::extractors::youtube_ua_for_playback_url(
+                    &effective_url,
+                    &rules,
+                ));
+            } else if is_social_cdn {
+                opts.speak_as("Mozilla/5.0 (Linux; Android 15; SM-S938B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36".to_string());
             }
-            if effective_url.contains("googlevideo.com") {
+
+            if is_yt {
+                // YouTube GVS rejects un-ranged plain GETs and >=32-64MB single-range bursts with 403.
+                opts.request_cap = Some(if effective_url.contains("mime=audio") {
+                    512 * 1024
+                } else {
+                    2 * 1024 * 1024
+                });
+                opts.max_connections = clamp_connections_unlocked(max_conns).min(8);
+            } else if is_social_cdn {
+                opts.request_cap = Some(16 * 1024 * 1024);
                 opts.max_connections = clamp_connections_unlocked(max_conns).min(16);
             } else {
                 opts.max_connections = clamp_connections_unlocked(max_conns);
             }
+            // Prevent tail-end micro-splitting storms at ~90%+ (keep segments >= 256 KB)
+            opts.min_split = u64::from(min_split_kb.max(256)) * 1024;
+            opts.connect_timeout = Duration::from_secs(15);
+            opts.read_timeout = Duration::from_secs(20);
+            opts.max_retries = 10;
             opts.global = Some(limiter);
             opts.host_limits = Some(hosts);
 
+            let mut headers = reqwest::header::HeaderMap::new();
+            if let Some(ref referer) = item_referer {
+                if let Ok(val) = reqwest::header::HeaderValue::from_str(referer.trim()) {
+                    headers.insert(reqwest::header::REFERER, val);
+                }
+            }
+            if let Some(ref cookie) = item_cookie {
+                if let Ok(val) = reqwest::header::HeaderValue::from_str(cookie.trim()) {
+                    headers.insert(reqwest::header::COOKIE, val);
+                }
+            }
+            if is_yt && (effective_url.contains("c=MWEB") || effective_url.contains("c=WEB")) {
+                if !headers.contains_key(reqwest::header::REFERER) {
+                    headers.insert(
+                        reqwest::header::REFERER,
+                        reqwest::header::HeaderValue::from_static("https://m.youtube.com/"),
+                    );
+                }
+                if !headers.contains_key(reqwest::header::ORIGIN) {
+                    headers.insert(
+                        reqwest::header::ORIGIN,
+                        reqwest::header::HeaderValue::from_static("https://m.youtube.com"),
+                    );
+                }
+            }
             let req = mdm_engine::Request {
                 url: parsed_url,
-                headers: reqwest::header::HeaderMap::new(),
+                headers,
                 dest: mdm_engine::Destination::File(PathBuf::from(&effective_save_path)),
             };
 

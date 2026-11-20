@@ -70,6 +70,15 @@ fun VideoGrabberWebView(
                     settings.domStorageEnabled = true
                     settings.mediaPlaybackRequiresUserGesture = false
                     webViewClient = object : WebViewClient() {
+                        override fun shouldOverrideUrlLoading(
+                            view: WebView?,
+                            request: WebResourceRequest?
+                        ): Boolean {
+                            val scheme = request?.url?.scheme?.lowercase() ?: return false
+                            // Block fb://, intent://, market:// etc. so social pages don't error with ERR_UNKNOWN_URL_SCHEME
+                            return scheme != "http" && scheme != "https"
+                        }
+
                         override fun shouldInterceptRequest(
                             view: WebView?,
                             request: WebResourceRequest?

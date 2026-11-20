@@ -82,6 +82,7 @@ fun HyperStreamApp(
 ) {
     val state by repository.uiState.collectAsState()
     val pendingUrl by repository.pendingSharedUrl.collectAsState()
+    val pendingExternal by repository.pendingExternalDownload.collectAsState()
     val shizukuManager = remember(state.settings.shizukuEnabled) {
         ShizukuManager(enabled = state.settings.shizukuEnabled)
     }
@@ -90,9 +91,22 @@ fun HyperStreamApp(
         state = state,
         repository = repository,
         pendingSharedUrl = pendingUrl,
+        pendingExternalDownload = pendingExternal,
         onClearPendingSharedUrl = { repository.setPendingSharedUrl(null) },
+        onClearPendingExternalDownload = { repository.setPendingExternalDownload(null) },
         onAddDownload = { url, fileName, conns, cat ->
             repository.addDownload(url = url, fileName = fileName, category = cat, connections = conns)
+        },
+        onAddDownloadWithHeaders = { url, fileName, conns, cat, ua, ref, cookie ->
+            repository.addDownload(
+                url = url,
+                fileName = fileName,
+                category = cat,
+                connections = conns,
+                userAgent = ua,
+                referer = ref,
+                cookie = cookie
+            )
         },
         onTogglePauseResume = { repository.togglePauseResume(it) },
         onRetryDownload = { repository.retryDownload(it) },
@@ -126,8 +140,11 @@ fun HyperStreamAppContent(
     repository: MdmRepository = remember { MdmRepository.shared },
     initialTab: Int = 0,
     pendingSharedUrl: String? = null,
+    pendingExternalDownload: com.hyperstream.downloadmanager.browser.ExternalDownloadRequest? = null,
     onClearPendingSharedUrl: () -> Unit = {},
+    onClearPendingExternalDownload: () -> Unit = {},
     onAddDownload: (url: String, fileName: String?, connections: Int, category: String) -> Unit = { _, _, _, _ -> },
+    onAddDownloadWithHeaders: (url: String, fileName: String?, connections: Int, category: String, userAgent: String?, referer: String?, cookie: String?) -> Unit = { u, f, c, cat, _, _, _ -> },
     onTogglePauseResume: (Long) -> Unit = {},
     onRetryDownload: (Long) -> Unit = {},
     onRefreshLink: (Long, String) -> Unit = { _, _ -> },
@@ -443,12 +460,16 @@ fun HyperStreamAppContent(
                     )
                 }
 
-                // PDM-style New Download Sheet
-                if (showNewDownloadSheet) {
+                // PDM-style New Download Sheet (also opens automatically for Vivaldi/Quetta browser handoffs)
+                if (showNewDownloadSheet || pendingExternalDownload != null) {
                     com.hyperstream.downloadmanager.ui.screens.NewDownloadSheet(
                         defaultConnections = state.settings.maxConnections,
                         defaultCategory = selectedCategory,
-                        onDismiss = { showNewDownloadSheet = false },
+                        initialRequest = pendingExternalDownload,
+                        onDismiss = {
+                            showNewDownloadSheet = false
+                            onClearPendingExternalDownload()
+                        },
                         onStartDownload = { url, conns, cat, _ ->
                             onAddDownload(url, null, conns, cat)
                             selectedTab = 0
@@ -457,7 +478,12 @@ fun HyperStreamAppContent(
                             onAddDownload(url, fileName, conns, cat)
                             selectedTab = 0
                         },
+                        onStartDownloadWithHeaders = { url, fileName, conns, cat, ua, ref, cookie ->
+                            onAddDownloadWithHeaders(url, fileName, conns, cat, ua, ref, cookie)
+                            selectedTab = 0
+                        },
                         onOpenFormatPicker = { url ->
+                            onClearPendingExternalDownload()
                             activePickerUrl = url
                         }
                     )

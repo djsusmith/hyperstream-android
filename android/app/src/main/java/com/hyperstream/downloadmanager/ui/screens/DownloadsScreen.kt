@@ -71,6 +71,7 @@ import com.hyperstream.downloadmanager.a2ui.HyperStreamA2uiCatalog
 import com.hyperstream.downloadmanager.browser.LinkParser
 import com.hyperstream.downloadmanager.core.DownloadItemUi
 import com.hyperstream.downloadmanager.core.MdmUiState
+import com.hyperstream.downloadmanager.ui.components.SegmentMapBar
 import com.hyperstream.downloadmanager.util.FileOpener
 
 @Composable
@@ -494,9 +495,16 @@ private fun PdmDownloadItemCard(
                         }
 
                         val pct = (item.progressFraction * 100).toInt()
-                        val totalStr = if (item.totalBytes > 0) formatBytes(item.totalBytes) else formatBytes(item.downloadedBytes)
+                        val dlStr = formatBytes(item.downloadedBytes)
+                        val totalStr = if (item.totalBytes > 0) formatBytes(item.totalBytes) else "—"
+                        val threadStr = "${item.activeConnections}/${item.maxConnections}T"
+                        val etaStr = item.etaSeconds?.takeIf { item.status == "Downloading" && it > 0 }?.let { " • ${formatEta(it)}" } ?: ""
                         Text(
-                            text = if (item.status == "Completed") totalStr else "$pct% of $totalStr",
+                            text = if (item.status == "Completed") {
+                                "$totalStr • ${item.maxConnections}T"
+                            } else {
+                                "$pct% ($dlStr / $totalStr) • $threadStr$etaStr"
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -531,6 +539,15 @@ private fun PdmDownloadItemCard(
                         onClick = if (item.status == "Failed") onRetry else onTogglePauseResume
                     )
                 }
+            }
+
+            // PC Download Manager style live thread segment map right on the card (no extra tap needed!)
+            if (item.status != "Completed" && (item.status == "Downloading" || item.segments.isNotEmpty())) {
+                SegmentMapBar(
+                    segments = item.segments,
+                    maxConnections = item.maxConnections,
+                    activeConnections = item.activeConnections
+                )
             }
 
             // Error display if failed (with tap-to-refresh hint)

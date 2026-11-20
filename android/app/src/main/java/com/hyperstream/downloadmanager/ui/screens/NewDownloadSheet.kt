@@ -79,16 +79,18 @@ data class ProbedLinkMetadata(
 fun NewDownloadSheet(
     defaultConnections: Int,
     defaultCategory: String,
+    initialRequest: com.hyperstream.downloadmanager.browser.ExternalDownloadRequest? = null,
     onDismiss: () -> Unit,
     onStartDownload: (url: String, connections: Int, category: String, checksum: String?) -> Unit,
     onStartDownloadWithFileName: ((url: String, fileName: String?, connections: Int, category: String) -> Unit)? = null,
+    onStartDownloadWithHeaders: ((url: String, fileName: String?, connections: Int, category: String, userAgent: String?, referer: String?, cookie: String?) -> Unit)? = null,
     onOpenFormatPicker: ((url: String) -> Unit)? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val clipboard = LocalClipboardManager.current
 
-    var urlInput by remember { mutableStateOf("") }
-    var autoFilledFromClipboard by remember { mutableStateOf(false) }
+    var urlInput by remember(initialRequest?.url) { mutableStateOf(initialRequest?.url.orEmpty()) }
+    var autoFilledFromClipboard by remember { mutableStateOf(initialRequest != null) }
     var checksumInput by remember { mutableStateOf("") }
     var showChecksum by remember { mutableStateOf(false) }
     val connectionChoices = listOf(16, 32, 64, 128)
@@ -136,9 +138,12 @@ fun NewDownloadSheet(
         isProbing = false
     }
 
-    val fallbackName = remember(trimmedUrl) {
-        val clean = trimmedUrl.substringBefore('?').substringBefore('#')
-        clean.substringAfterLast('/').takeIf { it.isNotBlank() && it.contains('.') } ?: "download_file"
+    val fallbackName = remember(trimmedUrl, initialRequest?.fileName) {
+        initialRequest?.fileName?.takeIf { it.isNotBlank() }
+            ?: run {
+                val clean = trimmedUrl.substringBefore('?').substringBefore('#')
+                clean.substringAfterLast('/').takeIf { it.isNotBlank() && it.contains('.') } ?: "download_file"
+            }
     }
     val displayMeta = probedMeta
     val activeFileName = displayMeta?.fileName ?: fallbackName
@@ -469,9 +474,20 @@ fun NewDownloadSheet(
                 Button(
                     onClick = {
                         val finalUrl = displayMeta?.resolvedUrl ?: validTarget?.uri ?: trimmedUrl
-                        val finalName = displayMeta?.fileName?.takeIf { it.isNotBlank() }
+                        val finalName = initialRequest?.fileName?.takeIf { it.isNotBlank() }
+                            ?: displayMeta?.fileName?.takeIf { it.isNotBlank() }
                         if (finalUrl.isNotBlank()) {
-                            if (onStartDownloadWithFileName != null) {
+                            if (onStartDownloadWithHeaders != null) {
+                                onStartDownloadWithHeaders(
+                                    finalUrl,
+                                    finalName,
+                                    selectedConnections,
+                                    activeCategory,
+                                    initialRequest?.userAgent,
+                                    initialRequest?.referer,
+                                    initialRequest?.cookie
+                                )
+                            } else if (onStartDownloadWithFileName != null) {
                                 onStartDownloadWithFileName(
                                     finalUrl,
                                     finalName,

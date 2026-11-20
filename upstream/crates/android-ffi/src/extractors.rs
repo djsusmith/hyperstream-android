@@ -687,11 +687,15 @@ async fn probe_social_embed_or_cobalt(
         }
     }
 
-    // 2. Scrape OpenGraph / embedded JSON video URLs directly from the social page
+    // 2. Scrape OpenGraph / embedded JSON video URLs directly from the social page.
+    // Desktop Chrome + Sec-Fetch-Mode: navigate prevents Facebook from returning a 3 KB fb:// app redirect stub.
+    let desktop_ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
     let resp = client
         .get(url)
-        .header(reqwest::header::USER_AGENT, ua)
+        .header(reqwest::header::USER_AGENT, desktop_ua)
+        .header(reqwest::header::ACCEPT, "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
         .header(reqwest::header::ACCEPT_LANGUAGE, "en-US,en;q=0.9")
+        .header("Sec-Fetch-Mode", "navigate")
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -701,12 +705,14 @@ async fn probe_social_embed_or_cobalt(
     let extracted_video_url = extract_meta_or_json_url(
         &html,
         &[
+            r#""browser_native_hd_url":""#,
+            r#""playable_url_quality_hd":""#,
+            r#""hd_src":""#,
             r#"property="og:video:secure_url" content=""#,
             r#"property="og:video" content=""#,
-            r#""hd_src":""#,
-            r#""playable_url_quality_hd":""#,
-            r#""video_url":""#,
+            r#""browser_native_sd_url":""#,
             r#""playable_url":""#,
+            r#""video_url":""#,
             r#""sd_src":""#,
         ],
     );
@@ -785,12 +791,59 @@ async fn probe_direct_url(
         Err(_) => 0,
     };
 
-    let fname = infer_smart_filename(url);
-    let ext = Path::new(&fname)
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("mp4")
-        .to_ascii_lowercase();
+    let clean_url_buf;
+    let effective_url = if url.contains("googlevideo.com") {
+        clean_url_buf = normalize_googlevideo_url(url);
+        clean_url_buf.as_str()
+    } else {
+        url
+    };
+
+    let (clen, ua, fname, ext, label_override) = if effective_url.contains("googlevideo.com") {
+        let parsed = reqwest::Url::parse(effective_url).ok();
+        let query_param = |key: &str| -> Option<String> {
+            parsed.as_ref().and_then(|u| {
+                u.query_pairs()
+                    .find(|(k, _)| k == key)
+                    .map(|(_, v)| v.into_owned())
+            })
+        };
+        let yt_clen = query_param("clen")
+            .and_then(|s| s.parse::<u64>().ok())
+            .filter(|&v| v > 0)
+            .unwrap_or(clen);
+        let mime = query_param("mime").unwrap_or_default().to_ascii_lowercase();
+        let yt_ext = if mime.contains("audio/mp4") {
+            "m4a"
+        } else if mime.contains("webm") {
+            "webm"
+        } else {
+            "mp4"
+        };
+        let itag = query_param("itag").unwrap_or_default();
+        let kind_label = if mime.starts_with("audio/") {
+            "Audio Stream"
+        } else {
+            "Video Stream"
+        };
+        let label = if itag.is_empty() {
+            format!("YouTube {kind_label} ({})", yt_ext.to_uppercase())
+        } else {
+            format!("YouTube {kind_label} #{itag} ({})", yt_ext.to_uppercase())
+        };
+        let name = format!("YouTube_Stream_{}.{}", if itag.is_empty() { "hd" } else { &itag }, yt_ext);
+        let yt_ua = youtube_ua_for_playback_url(effective_url, rules);
+        (yt_clen, yt_ua, name, yt_ext.to_string(), Some(label))
+    } else {
+        let fname = infer_smart_filename(effective_url);
+        let ext = Path::new(&fname)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("mp4")
+            .to_ascii_lowercase();
+        (clen, ua.to_string(), fname, ext, None)
+    };
+
     let cat = match ext.as_str() {
         "mp4" | "mkv" | "webm" | "avi" | "mov" => "Video",
         "mp3" | "m4a" | "flac" | "wav" | "ogg" => "Music",
@@ -800,32 +853,68 @@ async fn probe_direct_url(
         _ => "General",
     };
 
+    let format_kind = if cat == "Music" { "audio" } else { "video" };
     let mut streams = vec![serde_json::json!({
         "itag": 1,
-        "label": format!("Original File ({})", ext.to_uppercase()),
+        "label": label_override.unwrap_or_else(|| format!("Original File ({})", ext.to_uppercase())),
         "quality": ext.to_uppercase(),
-        "format_kind": "video",
+        "format_kind": format_kind,
         "bitrate_kbps": 0,
         "watermark_free": true,
         "ext": ext,
         "category": cat,
         "file_name": fname,
         "size_bytes": clen,
-        "url": url,
+        "url": effective_url,
         "user_agent": ua
     })];
 
     if matches!(cat, "Video" | "Music") || platform != "Direct" {
-        streams.extend(build_mp3_variants(&fname, url, clen, ua));
+        streams.extend(build_mp3_variants(&fname, effective_url, clen, &ua));
     }
 
     Ok(serde_json::json!({
         "ok": true,
-        "platform": platform,
+        "platform": if effective_url.contains("googlevideo.com") { "YouTube" } else { platform },
         "title": fname,
-        "author": platform,
+        "author": if effective_url.contains("googlevideo.com") { "YouTube" } else { platform },
         "watermark_free": true,
         "extractor_version": rules.version,
         "streams": streams
     }))
+}
+
+pub fn normalize_googlevideo_url(raw: &str) -> String {
+    let Ok(mut parsed) = reqwest::Url::parse(raw) else {
+        return raw.to_string();
+    };
+    let drop_keys = ["range", "rn", "rbuf", "ump", "srfvp", "alr"];
+    let kept: Vec<(String, String)> = parsed
+        .query_pairs()
+        .filter(|(k, _)| !drop_keys.contains(&k.as_ref()))
+        .map(|(k, v)| (k.into_owned(), v.into_owned()))
+        .collect();
+    if kept.len() == parsed.query_pairs().count() {
+        return raw.to_string();
+    }
+    {
+        let mut pairs = parsed.query_pairs_mut();
+        pairs.clear();
+        for (k, v) in kept {
+            pairs.append_pair(&k, &v);
+        }
+    }
+    parsed.to_string()
+}
+
+pub fn youtube_ua_for_playback_url(url: &str, rules: &ExtractorRules) -> String {
+    if url.contains("c=IOS") {
+        rules.youtube_ios_ua.clone()
+    } else if url.contains("c=ANDROID_VR") {
+        "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip".to_string()
+    } else if url.contains("c=MWEB") || url.contains("c=WEB") || url.contains("c=TV") {
+        "Mozilla/5.0 (Linux; Android 15; SM-S938B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36".to_string()
+    } else {
+        rules.youtube_android_ua.clone()
+    }
 }

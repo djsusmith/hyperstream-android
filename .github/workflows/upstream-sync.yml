@@ -23,10 +23,14 @@ jobs:
           bash scripts/sync-upstream.sh --remote
           NEW_SHA=$(python3 -c 'import json; print(json.load(open("upstream/UPSTREAM_VERSION.json"))["commit"])')
           NEW_VER=$(python3 -c 'import json; print(json.load(open("upstream/UPSTREAM_VERSION.json"))["version"])')
+          APP_VER=$(python3 -c 'import re; m=re.search(r"versionName\s*=\s*\"([^\"]+)\"", open("android/app/build.gradle.kts").read()); print(m.group(1) if m else "0.6.4")')
+          SHORT_SHA="${NEW_SHA:0:7}"
           echo "old_sha=$OLD_SHA" >> "$GITHUB_OUTPUT"
           echo "new_sha=$NEW_SHA" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
           echo "old_ver=$OLD_VER" >> "$GITHUB_OUTPUT"
           echo "new_ver=$NEW_VER" >> "$GITHUB_OUTPUT"
+          echo "app_ver=$APP_VER" >> "$GITHUB_OUTPUT"
           if [[ "$OLD_SHA" != "$NEW_SHA" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
@@ -48,7 +52,7 @@ jobs:
           rustup target add aarch64-linux-android
           cargo install cargo-ndk --locked
           cargo test --manifest-path upstream/Cargo.toml -p mdm-android-ffi
-          (cd upstream && cargo ndk -t arm64-v8a -o ../android/app/src/main/jniLibs build --release -p mdm-android-ffi)
+          (cd upstream && CARGO_PROFILE_RELEASE_DEBUG=0 CARGO_PROFILE_RELEASE_STRIP=symbols cargo ndk -t arm64-v8a -o ../android/app/src/main/jniLibs build --release -p mdm-android-ffi)
 
       - name: Set up Gradle
         if: steps.check_upstream.outputs.changed == 'true'
@@ -58,7 +62,7 @@ jobs:
         if: steps.check_upstream.outputs.changed == 'true'
         run: |
           gradle -p android :app:testDebugUnitTest :app:assembleRelease
-          cp android/app/build/outputs/apk/release/*.apk HyperStream-v${{ steps.check_upstream.outputs.new_ver }}-arm64.apk
+          cp android/app/build/outputs/apk/release/*.apk HyperStream-v${{ steps.check_upstream.outputs.app_ver }}-nightly-${{ steps.check_upstream.outputs.short_sha }}-arm64.apk
 
       - name: Commit Upstream Sync to main
         if: steps.check_upstream.outputs.changed == 'true' && steps.check_upstream.outputs.old_sha != steps.check_upstream.outputs.new_sha
@@ -76,7 +80,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete nightly --yes || true
-          gh release create nightly HyperStream-v${{ steps.check_upstream.outputs.new_ver }}-arm64.apk \
-            --title "HyperStream Nightly / Bug-Fix (Upstream ${{ steps.check_upstream.outputs.new_sha }})" \
-            --notes "Automated upstream sync with anefzaoui/misterdownloadmanager commit ${{ steps.check_upstream.outputs.new_sha }} (v${{ steps.check_upstream.outputs.new_ver }})." \
+          gh release create nightly HyperStream-v${{ steps.check_upstream.outputs.app_ver }}-nightly-${{ steps.check_upstream.outputs.short_sha }}-arm64.apk \
+            --title "HyperStream v${{ steps.check_upstream.outputs.app_ver }} Nightly (Upstream ${{ steps.check_upstream.outputs.short_sha }})" \
+            --notes "Automated nightly build for HyperStream v${{ steps.check_upstream.outputs.app_ver }} synced with upstream engine anefzaoui/misterdownloadmanager commit ${{ steps.check_upstream.outputs.new_sha }} (engine v${{ steps.check_upstream.outputs.new_ver }})." \
             --prerelease

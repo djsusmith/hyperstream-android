@@ -12,6 +12,18 @@ if (localAapt2.exists()) {
     project.extensions.extraProperties.set("android.aapt2FromMavenOverride", localAapt2.absolutePath)
 }
 
+val upstreamVersionFile = rootProject.file("../upstream/UPSTREAM_VERSION.json")
+val upstreamCommitSha: String = if (upstreamVersionFile.exists()) {
+    Regex("\"commit\"\\s*:\\s*\"([^\"]+)\"")
+        .find(upstreamVersionFile.readText())
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.take(12)
+        ?: "local"
+} else {
+    "local"
+}
+
 android {
     namespace = "com.hyperstream.downloadmanager"
     compileSdk = 35
@@ -20,8 +32,9 @@ android {
         applicationId = "com.hyperstream.downloadmanager"
         minSdk = 28
         targetSdk = 35
-        versionCode = 63
-        versionName = "0.6.3"
+        versionCode = 64
+        versionName = "0.6.4"
+        buildConfigField("String", "UPSTREAM_COMMIT", "\"$upstreamCommitSha\"")
         ndk {
             abiFilters += listOf("arm64-v8a")
         }

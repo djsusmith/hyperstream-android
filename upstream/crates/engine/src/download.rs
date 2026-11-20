@@ -78,8 +78,8 @@ const SHED_LEFT: Duration = Duration::from_secs(2);
 const INITIAL_PIECE: u64 = 64 * 1024;
 /// A pending connection is taken over after this many first-byte times of the probe (and never
 /// sooner than PREEMPT_MIN).
-const PREEMPT_TTFB: u32 = 2;
-const PREEMPT_MIN: Duration = Duration::from_millis(20);
+const PREEMPT_TTFB: u32 = 3;
+const PREEMPT_MIN: Duration = Duration::from_millis(500);
 /// The most connections a download offers to use (IDM's ceiling too).
 pub const MAX_CONNECTIONS: u32 = 32;
 /// The most connections once the user allows more than `MAX_CONNECTIONS` (issue #12); the

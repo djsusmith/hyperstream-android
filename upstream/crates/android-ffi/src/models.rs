@@ -34,6 +34,12 @@ pub struct DownloadItemDto {
     pub checksum_verified: Option<bool>,
     pub error_message: Option<String>,
     pub segments: Vec<SegmentDto>,
+    #[serde(default)]
+    pub user_agent: Option<String>,
+    #[serde(default)]
+    pub referer: Option<String>,
+    #[serde(default)]
+    pub cookie: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

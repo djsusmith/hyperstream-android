@@ -330,9 +330,10 @@ private fun PdmSpeedometerHeroCard(
                                     )
                                 }
                                 Text(
-                                    text = "Peak ${formatHeroSpeed(peakBps)} • Tap for thread map",
-                                    color = Color.White.copy(alpha = 0.8f),
-                                    fontSize = 12.sp
+                                    text = "$activeThreads / 128 Threads • Peak ${formatHeroSpeed(peakBps)}",
+                                    color = Color.White.copy(alpha = 0.88f),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
                                 )
                             }
                         } else {

@@ -601,8 +601,8 @@ fun ProgressInspectorSheet(
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Retry Download")
+                        Spacer(Modifier.width(4.dp))
+                        Text("Retry", maxLines = 1)
                     }
                     if (onRefreshLink != null) {
                         OutlinedButton(
@@ -610,7 +610,7 @@ fun ProgressInspectorSheet(
                         ) {
                             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("Refresh Link")
+                            Text("Refresh", maxLines = 1)
                         }
                     }
                 } else {

@@ -83,7 +83,7 @@ fun SmartFormatPickerSheet(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Video, 1: Audio / MP3
     var selectedStream by remember { mutableStateOf<ProbedStreamUi?>(null) }
-    var selectedConnections by remember { mutableIntStateOf(128) }
+    var selectedConnections by remember { mutableIntStateOf(16) }
 
     fun runProbe() {
         isLoading = true

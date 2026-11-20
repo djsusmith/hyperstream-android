@@ -37,19 +37,24 @@ class LinkCatcherActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val candidateText = LinkParser.extractRawTextFromIntent(intent)
-
-        val target = LinkParser.extractDownloadableTarget(candidateText)
-        if (target == null) {
+        val request = LinkParser.extractExternalDownloadRequest(intent)
+        if (request == null) {
             Toast.makeText(this, "HyperStream: no link found in shared text", Toast.LENGTH_SHORT).show()
             finish()
             return
         }
 
-        // Open HyperStream itself: torrents are added there, everything else opens the format picker.
+        // Open HyperStream itself: browser file handoffs open Add Download pre-filled,
+        // torrents are added directly, and social video links open the format picker.
         val open = Intent(this, MainActivity::class.java).apply {
-            putExtra(MainActivity.EXTRA_SHARED_URL, target.uri)
-            putExtra(MainActivity.EXTRA_SHARED_KIND, target.kind.name)
+            putExtra(MainActivity.EXTRA_SHARED_URL, request.url)
+            putExtra(MainActivity.EXTRA_SHARED_KIND, request.kind.name)
+            request.fileName?.let { putExtra(MainActivity.EXTRA_SHARED_FILENAME, it) }
+            request.mimeType?.let { putExtra(MainActivity.EXTRA_SHARED_MIME, it) }
+            request.userAgent?.let { putExtra(MainActivity.EXTRA_SHARED_USER_AGENT, it) }
+            request.referer?.let { putExtra(MainActivity.EXTRA_SHARED_REFERER, it) }
+            request.cookie?.let { putExtra(MainActivity.EXTRA_SHARED_COOKIE, it) }
+            putExtra(MainActivity.EXTRA_IS_BROWSER_HANDOFF, request.isExternalBrowserHandoff)
             addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or

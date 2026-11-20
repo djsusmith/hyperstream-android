@@ -320,6 +320,49 @@ fun SettingsAndUpdaterScreen(
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
+                        text = "Browser External Download Manager",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "HyperStream supports browser handoff with filename, User-Agent, Referer, and Cookie headers:\n" +
+                            "• Vivaldi: Settings → Web Pages → Downloads → External Download Manager → HyperStream\n" +
+                            "• Quetta / Firefox / Opera: Enable External Downloader in browser download settings and choose HyperStream\n" +
+                            "• Any browser: Tap Share → Download with HyperStream or copy a download URL to auto-probe on '+'",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            runCatching {
+                                context.startActivity(
+                                    android.content.Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).apply {
+                                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                )
+                            }.onFailure {
+                                runCatching {
+                                    context.startActivity(
+                                        android.content.Intent(
+                                            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                            android.net.Uri.parse("package:${context.packageName}")
+                                        ).apply {
+                                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    ) {
+                        Text("Open Android Default Apps Settings")
+                    }
+                }
+            }
+        }
+
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
                         text = HyperStreamCredits.HEADLINE,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold

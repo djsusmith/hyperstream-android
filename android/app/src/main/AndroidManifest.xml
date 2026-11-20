@@ -69,6 +69,17 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="magnet" />
             </intent-filter>
+            <!-- External Download Manager handoff (Vivaldi, Quetta, Firefox, Opera, ADM/1DM protocol) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:scheme="ftp" />
+                <data android:scheme="ftps" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
             <!-- Torrent files & Direct HTTP/HTTPS/FTP/FTPS downloads -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
