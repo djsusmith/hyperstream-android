@@ -119,6 +119,10 @@ pub struct SettingsDto {
     pub max_connections: u32,
     pub min_split_kb: u32,
     pub speed_limit_kbps: u64,
+    #[serde(default = "default_download_dir")]
+    pub default_download_dir: String,
+    #[serde(default = "default_true")]
+    pub use_category_folders: bool,
     pub dns_mode: String,
     pub custom_dns_server: String,
     pub proxy_url: String,
@@ -142,12 +146,22 @@ pub struct SettingsDto {
     pub debrid_accounts: Vec<DebridAccountDto>,
 }
 
+fn default_download_dir() -> String {
+    "/storage/emulated/0/Download/HyperStream".to_string()
+}
+
+fn default_true() -> bool {
+    true
+}
+
 impl Default for SettingsDto {
     fn default() -> Self {
         Self {
             max_connections: 32,
             min_split_kb: 64,
             speed_limit_kbps: 0,
+            default_download_dir: default_download_dir(),
+            use_category_folders: true,
             dns_mode: "system".to_string(),
             custom_dns_server: "https://cloudflare-dns.com/dns-query".to_string(),
             proxy_url: String::new(),

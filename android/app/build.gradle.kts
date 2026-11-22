@@ -32,8 +32,8 @@ android {
         applicationId = "com.hyperstream.downloadmanager"
         minSdk = 28
         targetSdk = 35
-        versionCode = 64
-        versionName = "0.6.4"
+        versionCode = 65
+        versionName = "0.6.5"
         buildConfigField("String", "UPSTREAM_COMMIT", "\"$upstreamCommitSha\"")
         ndk {
             abiFilters += listOf("arm64-v8a")

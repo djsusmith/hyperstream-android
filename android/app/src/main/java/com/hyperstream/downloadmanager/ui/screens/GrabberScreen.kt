@@ -160,12 +160,14 @@ fun GrabberScreen(
                             shape = RoundedCornerShape(10.dp)
                         ) {
                             Icon(Icons.Default.Language, contentDescription = null)
+                            Spacer(Modifier.width(4.dp))
+                            Text(if (showEmbeddedBrowser) "Hide Browser" else "Browser")
                         }
                     }
 
                     if (showEmbeddedBrowser) {
                         Text(
-                            text = "Built-In Browser Sniffer (Floats 'Download Video' when playing media):",
+                            text = "Built-In Browser Sniffer (Scroll freely, tap Fullscreen ⛶, or tap 'Download Video' when media plays):",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -174,7 +176,7 @@ fun GrabberScreen(
                             onDownloadDetectedMedia = { url -> onOpenFormatPicker(url) },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(320.dp)
+                                .height(500.dp)
                         )
                     }
                 }

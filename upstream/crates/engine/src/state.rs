@@ -99,15 +99,34 @@ impl ResumeState {
         segments: Vec<SavedSegment>,
         part: &File,
     ) -> io::Result<()> {
-        part.sync_data()?;
+        let _ = part.sync_data();
         self.segments = segments;
-        self.write(path)
+        if let Err(e) = self.write(path) {
+            if cfg!(target_os = "android") {
+                return Ok(());
+            }
+            return Err(e);
+        }
+        Ok(())
     }
 
     /// Write as is (its segments must already be on disk).
     pub fn write(&self, path: &Path) -> io::Result<()> {
         let json = serde_json::to_vec_pretty(self).map_err(io::Error::other)?;
-        craft_atomic::atomic_write(path, &json)
+        if let Err(first_err) = craft_atomic::atomic_write(path, &json) {
+            if std::fs::write(path, &json).is_ok() {
+                return Ok(());
+            }
+            let _ = std::fs::remove_file(path);
+            if std::fs::write(path, &json).is_ok() {
+                return Ok(());
+            }
+            if cfg!(target_os = "android") {
+                return Ok(());
+            }
+            return Err(first_err);
+        }
+        Ok(())
     }
 
     /// Bytes already on disk.

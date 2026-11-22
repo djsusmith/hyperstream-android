@@ -50,6 +50,13 @@ class MdmRepository(
         _pendingExternalDownload.value = request
     }
 
+    private val _pendingOpenNotificationsTab = MutableStateFlow(false)
+    val pendingOpenNotificationsTab: StateFlow<Boolean> = _pendingOpenNotificationsTab.asStateFlow()
+
+    fun setPendingOpenNotificationsTab(open: Boolean) {
+        _pendingOpenNotificationsTab.value = open
+    }
+
     init {
         if (MdmNative.safeInit(dataDir, downloadsDir)) {
             refreshFromNative()
@@ -81,6 +88,14 @@ class MdmRepository(
                 )
             }
             _uiState.value = parsed.copy(settings = effectiveSettings)
+            for (d in parsed.downloads) {
+                if (d.status == "Completed" && YouTubeMp4Muxer.hasPendingCompanionAudio(d.savePath)) {
+                    val targetPath = d.savePath
+                    pollScope.launch(Dispatchers.IO) {
+                        YouTubeMp4Muxer.muxCompanionAudioInPlace(targetPath)
+                    }
+                }
+            }
             true
         }.getOrDefault(false)
     }
@@ -119,47 +134,35 @@ class MdmRepository(
 
     /** Probes a page/media URL for downloadable variants (video resolutions, no-watermark, MP3 bitrates). */
     suspend fun probeVideo(url: String): ProbeResultUi = withContext(Dispatchers.IO) {
+        val raw = MdmNative.safeExecuteCommand("""{"op":"probe_video","url":${quote(url)}}""")
+        val nativeRes = parseProbeResultJson(raw)
+        if (nativeRes.ok && nativeRes.streams.isNotEmpty()) {
+            return@withContext nativeRes
+        }
         val ytVideoId = if (YouTubeWebViewExtractor.hasHost()) {
             runCatching { YouTubeWebViewExtractor.extractVideoId(url) }.getOrNull()
         } else {
             null
         }
         if (ytVideoId != null) {
-            return@withContext coroutineScope {
-                val webDeferred = async { runCatching { YouTubeWebViewExtractor.extract(ytVideoId) }.getOrNull() }
-                val nativeDeferred = async {
-                    val raw = MdmNative.safeExecuteCommand("""{"op":"probe_video","url":${quote(url)}}""")
-                    parseProbeResultJson(raw)
-                }
-                val webRes = webDeferred.await()
-                val nativeRes = nativeDeferred.await()
-                if (webRes != null && webRes.streams.isNotEmpty()) {
-                    // Use the verified WebView progressive stream(s) so downloads complete 100%
-                    // without hitting YouTube's 60-second GVS 403 cutoff on un-PO-tokenized InnerTube streams.
-                    val primary = webRes.streams.first()
-                    val audioFallback = listOf(
-                        primary.copy(
-                            itag = primary.itag + 1000,
-                            label = "Audio Extract • Verified Stream (M4A)",
-                            quality = "Audio",
-                            formatKind = "audio",
-                            ext = "m4a",
-                            category = "Music",
-                            fileName = primary.fileName.substringBeforeLast('.') + ".m4a"
-                        )
+            val webRes = runCatching { YouTubeWebViewExtractor.extract(ytVideoId) }.getOrNull()
+            if (webRes != null && webRes.streams.isNotEmpty()) {
+                val primary = webRes.streams.first()
+                val audioFallback = listOf(
+                    primary.copy(
+                        itag = primary.itag + 1000,
+                        label = "Audio Extract • Verified Stream (M4A)",
+                        quality = "Audio",
+                        formatKind = "audio",
+                        ext = "m4a",
+                        category = "Music",
+                        fileName = primary.fileName.substringBeforeLast('.') + ".m4a"
                     )
-                    webRes.copy(
-                        title = nativeRes.title.ifBlank { webRes.title },
-                        author = nativeRes.author.ifBlank { webRes.author },
-                        streams = webRes.streams + audioFallback
-                    )
-                } else {
-                    nativeRes
-                }
+                )
+                return@withContext webRes.copy(streams = webRes.streams + audioFallback)
             }
         }
-        val raw = MdmNative.safeExecuteCommand("""{"op":"probe_video","url":${quote(url)}}""")
-        parseProbeResultJson(raw)
+        nativeRes
     }
 
     /** Pulls the latest extractor rules (client versions, endpoints) so blocked extractors recover without an APK update. */
@@ -247,7 +250,7 @@ class MdmRepository(
                 it.copy(maxConnections = it.maxConnections.coerceIn(1, 128))
             }
             MdmNative.safeExecuteCommand(
-                """{"op":"update_settings","max_connections":${next.maxConnections},"speed_limit_kbps":${next.speedLimitKbps},"shizuku_enabled":${next.shizukuEnabled},"update_channel":"${next.updateChannel}","theme_id":"${next.themeId}","locale_code":"${next.localeCode}"}"""
+                """{"op":"update_settings","max_connections":${next.maxConnections},"min_split_kb":${next.minSplitKb},"speed_limit_kbps":${next.speedLimitKbps},"default_download_dir":${quote(next.defaultDownloadDir)},"use_category_folders":${next.useCategoryFolders},"dns_mode":${quote(next.dnsMode)},"custom_dns_server":${quote(next.customDnsServer)},"proxy_url":${quote(next.proxyUrl)},"vpn_interface_lock":${quote(next.vpnInterfaceLock)},"vpn_kill_switch":${next.vpnKillSwitch},"shizuku_enabled":${next.shizukuEnabled},"shizuku_auto_install_apk":${next.shizukuAutoInstallApk},"shizuku_doze_whitelist":${next.shizukuDozeWhitelist},"clipboard_monitor":${next.clipboardMonitor},"browser_catch_enabled":${next.browserCatchEnabled},"cnl2_enabled":${next.cnl2Enabled},"remote_control_enabled":${next.remoteControlEnabled},"remote_control_port":${next.remoteControlPort},"update_channel":${quote(next.updateChannel)},"theme_id":${quote(next.themeId)},"dark_mode":${quote(next.darkMode)},"locale_code":${quote(next.localeCode)}}"""
             )
             state.copy(settings = next)
         }

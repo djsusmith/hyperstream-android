@@ -79,6 +79,8 @@ data class ProbedLinkMetadata(
 fun NewDownloadSheet(
     defaultConnections: Int,
     defaultCategory: String,
+    defaultDownloadDir: String = "/storage/emulated/0/Download/HyperStream",
+    useCategoryFolders: Boolean = true,
     initialRequest: com.hyperstream.downloadmanager.browser.ExternalDownloadRequest? = null,
     onDismiss: () -> Unit,
     onStartDownload: (url: String, connections: Int, category: String, checksum: String?) -> Unit,
@@ -132,22 +134,34 @@ fun NewDownloadSheet(
         autoFilledFromClipboard = false
 
         isProbing = true
-        probedMeta = withContext(Dispatchers.IO) {
+        val meta = withContext(Dispatchers.IO) {
             probeRemoteUrl(target.uri, target.kind, defaultCategory)
+        }
+        probedMeta = meta
+        if (meta != null) {
+            val mb = 1024L * 1024L
+            selectedConnections = when {
+                !meta.supportsResume -> 16
+                meta.sizeBytes >= 200L * mb -> 128
+                meta.sizeBytes >= 40L * mb -> 64
+                meta.sizeBytes in 1..(12L * mb) -> 16
+                else -> 64
+            }
         }
         isProbing = false
     }
 
-    val fallbackName = remember(trimmedUrl, initialRequest?.fileName) {
-        initialRequest?.fileName?.takeIf { it.isNotBlank() }
+    val fallbackName = remember(trimmedUrl, initialRequest?.fileName, initialRequest?.mimeType) {
+        val raw = initialRequest?.fileName?.takeIf { it.isNotBlank() }
             ?: run {
                 val clean = trimmedUrl.substringBefore('?').substringBefore('#')
-                clean.substringAfterLast('/').takeIf { it.isNotBlank() && it.contains('.') } ?: "download_file"
+                clean.substringAfterLast('/').takeIf { it.isNotBlank() } ?: "download_file"
             }
+        ensureFileNameHasKnownExtension(raw, trimmedUrl, null, initialRequest?.mimeType)
     }
     val displayMeta = probedMeta
     val activeFileName = displayMeta?.fileName ?: fallbackName
-    val activeExt = displayMeta?.extension ?: activeFileName.substringAfterLast('.', "FILE").uppercase().take(4)
+    val activeExt = displayMeta?.extension ?: (knownExtensionOf(activeFileName)?.uppercase() ?: "FILE").take(4)
     val activeCategory = displayMeta?.category ?: remember(activeExt, defaultCategory) {
         categoryForExt(activeExt, defaultCategory)
     }
@@ -440,8 +454,10 @@ fun NewDownloadSheet(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        val shortBase = defaultDownloadDir.removePrefix("/storage/emulated/0/").trimEnd('/')
+                        val displayDir = if (useCategoryFolders) "$shortBase/$activeCategory" else shortBase
                         Text(
-                            text = "Download/HyperStream/$activeCategory",
+                            text = displayDir,
                             fontWeight = FontWeight.SemiBold,
                             style = MaterialTheme.typography.bodyMedium
                         )
@@ -608,15 +624,20 @@ private suspend fun probeRemoteUrl(
         }.getOrDefault("")
 
         val mimeExt = extensionFromMime(contentType)
-        val rawName = when {
+        val candidateBase = when {
             !nameFromDisp.isNullOrBlank() -> nameFromDisp
-            nameFromPath.isNotBlank() && nameFromPath.contains('.') -> nameFromPath
-            nameFromPath.isNotBlank() && mimeExt != null -> "$nameFromPath.$mimeExt"
+            nameFromPath.isNotBlank() -> nameFromPath
             mimeExt != null -> "download.$mimeExt"
             else -> "download_file"
         }
+        val rawName = ensureFileNameHasKnownExtension(
+            baseName = candidateBase,
+            originalUrl = url,
+            resolvedUrl = currentUrl,
+            mimeType = contentType
+        )
 
-        val ext = rawName.substringAfterLast('.', mimeExt ?: "FILE").uppercase().take(4)
+        val ext = (knownExtensionOf(rawName) ?: mimeExt ?: "FILE").uppercase().take(4)
         val cat = categoryForExt(ext, defaultCategory)
 
         ProbedLinkMetadata(
@@ -630,6 +651,61 @@ private suspend fun probeRemoteUrl(
     }.getOrNull()
 }
 
+private val KNOWN_EXTENSIONS = setOf(
+    "apk", "xapk", "apks", "aab", "obb", "dex", "jar",
+    "mkv", "mp4", "webm", "avi", "mov", "flv", "m4v", "3gp", "ts", "m2ts", "vob", "ogv", "m3u8", "mpd",
+    "mp3", "m4a", "aac", "flac", "wav", "ogg", "oga", "opus", "wma", "amr", "aiff",
+    "zip", "rar", "7z", "tar", "gz", "tgz", "xz", "txz", "bz2", "tbz2", "zst", "lz4", "cab",
+    "iso", "img", "dmg", "exe", "msi", "deb", "rpm", "appimage", "bin", "dat", "rom", "nsp", "xci",
+    "pdf", "epub", "mobi", "azw3", "djvu", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf",
+    "txt", "csv", "tsv", "json", "xml", "yaml", "yml", "toml", "ini", "cfg", "conf", "log", "md", "html", "htm",
+    "jpg", "jpeg", "png", "gif", "webp", "avif", "svg", "bmp", "ico", "tiff", "heic",
+    "torrent", "srt", "ass", "vtt", "sub", "ttf", "otf", "woff", "woff2", "sql", "db", "sqlite"
+)
+
+internal fun knownExtensionOf(name: String?): String? {
+    if (name.isNullOrBlank()) return null
+    val trimmed = name.trim().trim('"', '\'', '/', '\\')
+    if (!trimmed.contains('.')) return null
+    val ext = trimmed.substringAfterLast('.').lowercase()
+    return ext.takeIf { it in KNOWN_EXTENSIONS }
+}
+
+internal fun hasKnownFileExtension(name: String?): Boolean = knownExtensionOf(name) != null
+
+private fun extractKnownExtensionFromUrl(rawUrl: String?): String? {
+    if (rawUrl.isNullOrBlank()) return null
+    val decoded = runCatching { URLDecoder.decode(rawUrl, "UTF-8") }.getOrDefault(rawUrl)
+    val query = decoded.substringAfter('?', "").substringBefore('#')
+    if (query.isNotEmpty()) {
+        for (pair in query.split('&')) {
+            val value = pair.substringAfter('=', "")
+            val ext = knownExtensionOf(value)
+            if (ext != null) return ext
+        }
+    }
+    val pathSeg = decoded.substringBefore('?').substringBefore('#').substringAfterLast('/')
+    return knownExtensionOf(pathSeg)
+}
+
+internal fun ensureFileNameHasKnownExtension(
+    baseName: String,
+    originalUrl: String?,
+    resolvedUrl: String?,
+    mimeType: String?
+): String {
+    val cleanBase = baseName.trim().ifEmpty { "download_file" }
+    if (hasKnownFileExtension(cleanBase)) return cleanBase
+    val ext = extractKnownExtensionFromUrl(resolvedUrl)
+        ?: extractKnownExtensionFromUrl(originalUrl)
+        ?: mimeType?.substringBefore(';')?.trim()?.lowercase()?.let { extensionFromMime(it) }
+    return if (ext != null) {
+        "${cleanBase.trimEnd('.')}.$ext"
+    } else {
+        cleanBase
+    }
+}
+
 private fun parseContentDispositionFileName(header: String?): String? {
     if (header.isNullOrBlank()) return null
     val utf8Match = Regex("""filename\*=UTF-8''([^;]+)""", RegexOption.IGNORE_CASE).find(header)
@@ -640,29 +716,67 @@ private fun parseContentDispositionFileName(header: String?): String? {
     return stdMatch?.groupValues?.getOrNull(1)?.trim()
 }
 
-private fun extensionFromMime(mime: String): String? = when (mime) {
+private fun extensionFromMime(mime: String): String? = when (mime.substringBefore(';').trim().lowercase()) {
     "application/vnd.android.package-archive" -> "apk"
+    "application/vnd.android.xapk", "application/xapk-package-archive" -> "xapk"
+    "application/x-apks" -> "apks"
     "application/zip", "application/x-zip-compressed" -> "zip"
     "application/x-rar-compressed", "application/vnd.rar" -> "rar"
     "application/x-7z-compressed" -> "7z"
+    "application/x-tar" -> "tar"
     "application/gzip", "application/x-gzip" -> "gz"
+    "application/x-xz" -> "xz"
+    "application/x-bzip2" -> "bz2"
+    "application/zstd" -> "zst"
     "application/x-iso9660-image", "application/octet-stream-iso" -> "iso"
+    "application/x-apple-diskimage" -> "dmg"
+    "application/x-msdownload", "application/x-dosexec" -> "exe"
+    "application/vnd.debian.binary-package", "application/x-deb" -> "deb"
+    "application/x-rpm" -> "rpm"
     "application/pdf" -> "pdf"
-    "video/mp4" -> "mp4"
-    "video/x-matroska" -> "mkv"
+    "application/epub+zip" -> "epub"
+    "application/msword" -> "doc"
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "docx"
+    "application/vnd.ms-excel" -> "xls"
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" -> "xlsx"
+    "application/vnd.ms-powerpoint" -> "ppt"
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation" -> "pptx"
+    "text/plain" -> "txt"
+    "text/csv" -> "csv"
+    "application/json" -> "json"
+    "application/xml", "text/xml" -> "xml"
+    "text/html" -> "html"
+    "application/x-bittorrent" -> "torrent"
+    "video/mp4", "application/mp4" -> "mp4"
+    "video/x-matroska", "application/x-matroska" -> "mkv"
     "video/webm" -> "webm"
+    "video/x-msvideo", "video/avi" -> "avi"
+    "video/quicktime" -> "mov"
+    "video/x-flv" -> "flv"
+    "video/x-m4v" -> "m4v"
+    "video/3gpp" -> "3gp"
+    "video/mp2t" -> "ts"
+    "application/vnd.apple.mpegurl", "application/x-mpegurl" -> "m3u8"
     "audio/mpeg", "audio/mp3" -> "mp3"
-    "audio/flac" -> "flac"
-    "audio/mp4", "audio/x-m4a" -> "m4a"
+    "audio/flac", "audio/x-flac" -> "flac"
+    "audio/mp4", "audio/x-m4a", "audio/m4a" -> "m4a"
+    "audio/aac" -> "aac"
+    "audio/wav", "audio/x-wav" -> "wav"
+    "audio/ogg", "application/ogg" -> "ogg"
+    "audio/opus" -> "opus"
+    "image/jpeg" -> "jpg"
+    "image/png" -> "png"
+    "image/gif" -> "gif"
+    "image/webp" -> "webp"
     else -> null
 }
 
 private fun categoryForExt(ext: String, defaultCategory: String): String = when {
-    ext in listOf("MP4", "MKV", "WEBM", "MOV", "AVI") -> "Video"
-    ext in listOf("MP3", "FLAC", "AAC", "WAV", "OGG", "M4A") -> "Music"
-    ext in listOf("ZIP", "RAR", "7Z", "TAR", "GZ", "ISO", "XZ") -> "Compressed"
-    ext in listOf("PDF", "DOC", "DOCX", "EPUB", "TXT") -> "Documents"
-    ext in listOf("APK", "XAPK", "EXE", "DEB", "MSI") -> "Programs"
+    ext in listOf("MP4", "MKV", "WEBM", "MOV", "AVI", "FLV", "M4V", "3GP", "TS", "M3U8") -> "Video"
+    ext in listOf("MP3", "FLAC", "AAC", "WAV", "OGG", "OPUS", "M4A") -> "Music"
+    ext in listOf("ZIP", "RAR", "7Z", "TAR", "GZ", "TGZ", "ISO", "XZ", "BZ2", "ZST") -> "Compressed"
+    ext in listOf("PDF", "DOC", "DOCX", "XLS", "XLSX", "PPT", "PPTX", "EPUB", "TXT", "CSV") -> "Documents"
+    ext in listOf("APK", "XAPK", "APKS", "AAB", "OBB", "EXE", "DEB", "RPM", "MSI", "DMG") -> "Programs"
     defaultCategory !in listOf("All", "Unfinished", "Finished", "Downloading", "Completed", "Queued") -> defaultCategory
     else -> "General"
 }

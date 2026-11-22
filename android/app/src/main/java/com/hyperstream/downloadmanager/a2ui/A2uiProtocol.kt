@@ -48,6 +48,24 @@ sealed class A2uiComponent(open val id: String) {
             val icon: String = "bolt"
         )
     }
+
+    data class DownloadNotificationCard(
+        override val id: String,
+        val downloadId: Long,
+        val fileNamePath: String,
+        val categoryPath: String,
+        val statusPath: String,
+        val progressPercentPath: String,
+        val downloadedBytesPath: String,
+        val totalBytesPath: String,
+        val speedBpsPath: String,
+        val etaSecondsPath: String,
+        val activeThreadsPath: String,
+        val maxThreadsPath: String,
+        val segmentStatesPath: String,
+        val savePathKey: String,
+        val errorMessagePath: String
+    ) : A2uiComponent(id)
 }
 
 data class A2uiSurface(
@@ -83,6 +101,16 @@ data class A2uiSurface(
                     obj.put("component", "MetricGrid")
                     obj.put("count", c.items.size)
                 }
+                is A2uiComponent.DownloadNotificationCard -> {
+                    obj.put("component", "DownloadNotificationCard")
+                    obj.put("downloadId", c.downloadId)
+                    obj.put("bindings", JSONObject()
+                        .put("fileName", c.fileNamePath)
+                        .put("status", c.statusPath)
+                        .put("progressPercent", c.progressPercentPath)
+                        .put("speedBps", c.speedBpsPath)
+                        .put("etaSeconds", c.etaSecondsPath))
+                }
             }
             compsArr.put(obj)
         }
@@ -97,6 +125,7 @@ data class A2uiSurface(
 
 object HyperStreamA2uiCatalog {
     const val HERO_SURFACE_ID = "hyperstream.downloads.hero"
+    const val NOTIFICATIONS_SURFACE_ID = "hyperstream.notifications.progress"
 
     fun buildDownloadsHeroSurface(
         speedBps: Long,
@@ -138,6 +167,131 @@ object HyperStreamA2uiCatalog {
                 "hasActive" to (activeCount > 0),
                 "speedHistory" to speedHistory
             )
+        )
+    }
+
+    fun buildDownloadNotificationsSurface(
+        downloads: List<com.hyperstream.downloadmanager.core.DownloadItemUi>,
+        totalDownSpeedBps: Long,
+        activeThreadsTotal: Int,
+        wakeLockActive: Boolean,
+        batteryOptimizationIgnored: Boolean,
+        filter: String = "All"
+    ): A2uiSurface {
+        val activeCount = downloads.count { it.status == "Downloading" || it.status == "Probing" }
+        val completedCount = downloads.count { it.status == "Completed" }
+        val pausedOrFailedCount = downloads.count { it.status == "Paused" || it.status == "Failed" || it.status == "Queued" }
+
+        val filtered = when (filter) {
+            "Active" -> downloads.filter { it.status == "Downloading" || it.status == "Probing" }
+            "Paused/Failed" -> downloads.filter { it.status == "Paused" || it.status == "Failed" || it.status == "Queued" }
+            "Completed" -> downloads.filter { it.status == "Completed" }
+            else -> downloads
+        }.sortedWith(
+            compareBy<com.hyperstream.downloadmanager.core.DownloadItemUi> {
+                when (it.status) {
+                    "Downloading", "Probing" -> 0
+                    "Failed" -> 1
+                    "Paused", "Queued" -> 2
+                    "Completed" -> 3
+                    else -> 4
+                }
+            }.thenByDescending { it.id }
+        )
+
+        val comps = mutableListOf<A2uiComponent>()
+        val dm = mutableMapOf<String, Any?>(
+            "totalDownSpeedBps" to totalDownSpeedBps,
+            "activeThreadsTotal" to activeThreadsTotal,
+            "activeCount" to activeCount,
+            "completedCount" to completedCount,
+            "pausedOrFailedCount" to pausedOrFailedCount,
+            "wakeLockActive" to wakeLockActive,
+            "batteryOptimizationIgnored" to batteryOptimizationIgnored
+        )
+
+        val statusTitle = if (activeCount > 0) {
+            val mbps = String.format("%.2f MB/s", totalDownSpeedBps / (1024.0 * 1024.0))
+            "Live Notification Stream • $activeCount Active ($mbps • $activeThreadsTotal Threads)"
+        } else {
+            "Notification Center Ready • $completedCount Completed • $pausedOrFailedCount Queued/Paused"
+        }
+        val statusSub = buildString {
+            append(if (wakeLockActive) "Foreground Service & High-Perf Wi-Fi Lock Active" else "Engine Idle (Standby)")
+            append(" • ")
+            append(if (batteryOptimizationIgnored) "Battery: Unrestricted" else "Battery: Optimized (Tap to Whitelist)")
+        }
+
+        comps.add(
+            A2uiComponent.StatusBanner(
+                id = "notif_system_banner",
+                title = statusTitle,
+                subtitle = statusSub,
+                tone = if (!batteryOptimizationIgnored) "warning" else if (activeCount > 0) "active" else "info"
+            )
+        )
+
+        filtered.forEach { d ->
+            val p = "dl_${d.id}"
+            val pct = if (d.status == "Completed") {
+                100f
+            } else if (d.totalBytes > 0L) {
+                ((d.downloadedBytes.toDouble() / d.totalBytes.toDouble()) * 100.0).toFloat().coerceIn(0f, 100f)
+            } else {
+                0f
+            }
+            // Build a 16-bucket segment state array: 0 = waiting, 1 = active, 2 = done
+            val buckets = IntArray(16) { idx ->
+                val seg = d.segments.getOrNull(idx % d.segments.size.coerceAtLeast(1))
+                when {
+                    d.status == "Completed" -> 2
+                    seg == null -> if (idx < (pct / 6.25f).toInt()) 2 else 0
+                    seg.end > seg.start && seg.pos >= seg.end -> 2
+                    seg.active -> 1
+                    seg.pos > seg.start -> 1
+                    else -> 0
+                }
+            }.toList()
+
+            dm["${p}_name"] = d.name
+            dm["${p}_cat"] = d.category
+            dm["${p}_status"] = d.status
+            dm["${p}_pct"] = pct
+            dm["${p}_done"] = d.downloadedBytes
+            dm["${p}_total"] = d.totalBytes
+            dm["${p}_speed"] = d.speedBps
+            dm["${p}_eta"] = d.etaSeconds ?: -1L
+            dm["${p}_actConns"] = d.activeConnections
+            dm["${p}_maxConns"] = d.maxConnections
+            dm["${p}_segments"] = buckets
+            dm["${p}_savePath"] = d.savePath
+            dm["${p}_error"] = d.errorMessage ?: ""
+
+            comps.add(
+                A2uiComponent.DownloadNotificationCard(
+                    id = "notif_card_${d.id}",
+                    downloadId = d.id,
+                    fileNamePath = "${p}_name",
+                    categoryPath = "${p}_cat",
+                    statusPath = "${p}_status",
+                    progressPercentPath = "${p}_pct",
+                    downloadedBytesPath = "${p}_done",
+                    totalBytesPath = "${p}_total",
+                    speedBpsPath = "${p}_speed",
+                    etaSecondsPath = "${p}_eta",
+                    activeThreadsPath = "${p}_actConns",
+                    maxThreadsPath = "${p}_maxConns",
+                    segmentStatesPath = "${p}_segments",
+                    savePathKey = "${p}_savePath",
+                    errorMessagePath = "${p}_error"
+                )
+            )
+        }
+
+        return A2uiSurface(
+            surfaceId = NOTIFICATIONS_SURFACE_ID,
+            components = comps,
+            dataModel = dm
         )
     }
 }

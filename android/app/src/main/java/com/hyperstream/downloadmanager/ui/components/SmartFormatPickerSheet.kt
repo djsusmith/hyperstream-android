@@ -83,7 +83,21 @@ fun SmartFormatPickerSheet(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Video, 1: Audio / MP3
     var selectedStream by remember { mutableStateOf<ProbedStreamUi?>(null) }
-    var selectedConnections by remember { mutableIntStateOf(16) }
+    var selectedConnections by remember { mutableIntStateOf(32) }
+    var userOverrodeConnections by remember { mutableStateOf(false) }
+    var autoThreadReason by remember { mutableStateOf("Analyzing stream for optimal thread count...") }
+
+    LaunchedEffect(selectedStream, probeResult?.platform) {
+        val s = selectedStream ?: return@LaunchedEffect
+        if (!userOverrodeConnections) {
+            val (recommended, reason) = analyzeRecommendedThreads(
+                stream = s,
+                platform = probeResult?.platform ?: "Media"
+            )
+            selectedConnections = recommended
+            autoThreadReason = reason
+        }
+    }
 
     fun runProbe() {
         isLoading = true
@@ -275,6 +289,7 @@ fun SmartFormatPickerSheet(
                             selected = selectedTab == 0,
                             onClick = {
                                 selectedTab = 0
+                                userOverrodeConnections = false
                                 selectedStream = videoStreams.firstOrNull() ?: res.streams.firstOrNull()
                             },
                             text = {
@@ -291,6 +306,7 @@ fun SmartFormatPickerSheet(
                             selected = selectedTab == 1,
                             onClick = {
                                 selectedTab = 1
+                                userOverrodeConnections = false
                                 selectedStream = audioStreams.firstOrNull() ?: res.streams.firstOrNull()
                             },
                             text = {
@@ -324,7 +340,10 @@ fun SmartFormatPickerSheet(
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { selectedStream = stream }
+                                    .clickable {
+                                        userOverrodeConnections = false
+                                        selectedStream = stream
+                                    }
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -407,35 +426,46 @@ fun SmartFormatPickerSheet(
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                    // Engine Acceleration selector row with connection pills: [16T], [32T], [64T], [128T]
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Icon(Icons.Default.Bolt, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-                            Text("Engine Acceleration:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            listOf(16, 32, 64, 128).forEach { conns ->
-                                val active = selectedConnections == conns
-                                FilterChip(
-                                    selected = active,
-                                    onClick = { selectedConnections = conns },
-                                    label = { Text("${conns}T", fontWeight = if (active) FontWeight.Bold else FontWeight.Normal) },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                                    ),
-                                    border = BorderStroke(
-                                        width = if (active) 1.5.dp else 1.dp,
-                                        color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                    // Engine Acceleration selector row with auto-analyzed recommendation + connection pills: [16T], [32T], [64T], [128T]
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Icon(Icons.Default.Bolt, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                Text("Engine Acceleration:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                listOf(16, 32, 64, 128).forEach { conns ->
+                                    val active = selectedConnections == conns
+                                    FilterChip(
+                                        selected = active,
+                                        onClick = {
+                                            selectedConnections = conns
+                                            userOverrodeConnections = true
+                                            autoThreadReason = "Manual selection (${conns}T)"
+                                        },
+                                        label = { Text("${conns}T", fontWeight = if (active) FontWeight.Bold else FontWeight.Normal) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                        ),
+                                        border = BorderStroke(
+                                            width = if (active) 1.5.dp else 1.dp,
+                                            color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                                        )
                                     )
-                                )
+                                }
                             }
                         }
+                        Text(
+                            text = autoThreadReason,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
 
                     // Primary Action Button: Download icon + Start Download (<format> • <N> Threads)
@@ -478,5 +508,33 @@ fun SmartFormatPickerSheet(
                 }
             }
         }
+    }
+}
+
+internal fun analyzeRecommendedThreads(
+    stream: ProbedStreamUi,
+    platform: String
+): Pair<Int, String> {
+    val mb = 1024L * 1024L
+    val sz = stream.sizeBytes
+    val q = (stream.quality + " " + stream.label).lowercase()
+    val kind = stream.formatKind.lowercase()
+
+    if (kind == "audio" || kind == "mp3" || (sz in 1..(15L * mb))) {
+        return 16 to "Auto-analyzed: 16T selected (Compact stream / audio)"
+    }
+    if (sz >= 250L * mb || q.contains("2160p") || q.contains("4k") || q.contains("1440p")) {
+        return 128 to "Auto-analyzed: 128T selected (4K / Large stream ≥ 250 MB)"
+    }
+    if (sz >= 60L * mb || q.contains("1080p")) {
+        return 64 to "Auto-analyzed: 64T selected (1080p Full HD / 60–250 MB)"
+    }
+    if (sz >= 15L * mb || q.contains("720p") || q.contains("480p")) {
+        return 32 to "Auto-analyzed: 32T selected (HD stream / 15–60 MB)"
+    }
+    return if (platform.equals("Direct", ignoreCase = true)) {
+        64 to "Auto-analyzed: 64T selected (Direct multi-segment)"
+    } else {
+        32 to "Auto-analyzed: 32T selected (Balanced CDN acceleration)"
     }
 }

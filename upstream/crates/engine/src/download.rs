@@ -71,15 +71,15 @@ const LINK_WINDOW: Duration = Duration::from_secs(1);
 /// `SHED_LEFT` of work left at its own pace, reconnects. A slow TCP path (or a slow server
 /// slot) rarely survives a new request, and otherwise every free connection can end up stuck
 /// on one (measured: 14 s instead of ~2 s for 32 MiB when every third request was slow).
-const SHED_GRACE: Duration = Duration::from_secs(2);
+const SHED_GRACE: Duration = Duration::from_secs(5);
 const SHED_RATIO: u64 = 4;
-const SHED_LEFT: Duration = Duration::from_secs(2);
+const SHED_LEFT: Duration = Duration::from_secs(5);
 /// A download starts with one connection per this many bytes (at most `max_connections`).
 const INITIAL_PIECE: u64 = 64 * 1024;
 /// A pending connection is taken over after this many first-byte times of the probe (and never
 /// sooner than PREEMPT_MIN).
-const PREEMPT_TTFB: u32 = 3;
-const PREEMPT_MIN: Duration = Duration::from_millis(500);
+const PREEMPT_TTFB: u32 = 6;
+const PREEMPT_MIN: Duration = Duration::from_secs(3);
 /// The most connections a download offers to use (IDM's ceiling too).
 pub const MAX_CONNECTIONS: u32 = 32;
 /// The most connections once the user allows more than `MAX_CONNECTIONS` (issue #12); the
@@ -2203,12 +2203,25 @@ async fn open_destination(
     let (dest, reservation, file) = match dest {
         Destination::File(p) => {
             let r = naming::reserve(p).ok_or_else(|| Error::InUse(p.clone()))?;
-            let file = std::fs::OpenOptions::new()
+            let part_p = naming::part_path(p);
+            let file = match std::fs::OpenOptions::new()
                 .read(true)
                 .write(true)
                 .create(true)
                 .truncate(true)
-                .open(naming::part_path(p))?;
+                .open(&part_p)
+            {
+                Ok(f) => f,
+                Err(_) => {
+                    let _ = std::fs::remove_file(&part_p);
+                    std::fs::OpenOptions::new()
+                        .read(true)
+                        .write(true)
+                        .create(true)
+                        .truncate(true)
+                        .open(&part_p)?
+                }
+            };
             (p.clone(), r, file)
         }
         Destination::Dir(dir) => {
@@ -2673,9 +2686,13 @@ fn finish(
         dest.to_owned()
     };
     // Antivirus scanners and indexers briefly lock new files on Windows: retry the rename.
-    craft_atomic::retry_rename(craft_atomic::RenameRetry::platform(), || {
+    // On Android FUSE shared storage, fall back to copy + remove if rename is rejected.
+    if let Err(rename_err) = craft_atomic::retry_rename(craft_atomic::RenameRetry::platform(), || {
         std::fs::rename(&part, &dest)
-    })?;
+    }) {
+        std::fs::copy(&part, &dest).map_err(|_| rename_err)?;
+        let _ = std::fs::remove_file(&part);
+    }
     // Only now is the resume state obsolete.
     let _ = std::fs::remove_file(state_path(original));
     Ok(Outcome { path: dest, size })
@@ -3725,6 +3742,7 @@ async fn receive_all(
                 request(ctx, target, from - overlap, to).await?
             }
         };
+        ctx.shared.with_planner(|p| p.mark_receiving(id));
         match receive(ctx, id, b, from, to, overlap, whole).await? {
             Received::Complete(end) => return Ok(Some(end)),
             Received::Lost => return Ok(None),
@@ -4935,9 +4953,18 @@ fn should_shed(ctx: &Ctx, id: WorkerId, pace: &Pace, at: u64) -> bool {
     let held = ctx.shared.disk_held.lock().unwrap().map(|t| t.elapsed());
     let one = ctx.shared.best_speed.load(Ordering::Relaxed);
     let link = ctx.shared.link.lock().unwrap().best;
-    let (left, receiving) = ctx
-        .shared
-        .with_planner(|p| (p.room(id, at).unwrap_or(0), p.receiving_workers()));
+    let (left, receiving, total_done) = ctx.shared.with_planner(|p| {
+        (
+            p.room(id, at).unwrap_or(0),
+            p.receiving_workers(),
+            p.downloaded(),
+        )
+    });
+    // Never shed active tail segments (< 8 MiB left or >= 85% total progress) to prevent
+    // tail-end stop/restart storms on multi-gigabyte CDN downloads with 64-128 threads.
+    if left < 8 * 1024 * 1024 || (ctx.size > 0 && total_done.saturating_mul(100) / ctx.size >= 85) {
+        return false;
+    }
     too_slow(
         pace.net_speed(),
         pace.on_net(),

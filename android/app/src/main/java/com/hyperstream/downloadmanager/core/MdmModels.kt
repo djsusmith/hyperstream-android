@@ -121,6 +121,8 @@ data class SettingsUi(
     @SerialName("max_connections") val maxConnections: Int = 32,
     @SerialName("min_split_kb") val minSplitKb: Int = 64,
     @SerialName("speed_limit_kbps") val speedLimitKbps: Long = 0L,
+    @SerialName("default_download_dir") val defaultDownloadDir: String = "/storage/emulated/0/Download/HyperStream",
+    @SerialName("use_category_folders") val useCategoryFolders: Boolean = true,
     @SerialName("dns_mode") val dnsMode: String = "system",
     @SerialName("custom_dns_server") val customDnsServer: String = "https://cloudflare-dns.com/dns-query",
     @SerialName("proxy_url") val proxyUrl: String = "",

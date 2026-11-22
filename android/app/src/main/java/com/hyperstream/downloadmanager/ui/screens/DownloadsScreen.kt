@@ -47,6 +47,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -61,11 +62,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.hyperstream.downloadmanager.a2ui.A2uiSurfaceRenderer
 import com.hyperstream.downloadmanager.a2ui.HyperStreamA2uiCatalog
 import com.hyperstream.downloadmanager.browser.LinkParser
@@ -92,9 +96,22 @@ fun DownloadsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var showFallbackAddSheet by remember { mutableStateOf(false) }
     var itemPendingDelete by remember { mutableStateOf<DownloadItemUi?>(null) }
     var alsoDeleteFromStorage by remember { mutableStateOf(true) }
+    var batteryUnrestricted by remember { mutableStateOf(isBatteryOptimizationIgnored(context)) }
+    var batteryPromptDismissed by remember { mutableStateOf(false) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                batteryUnrestricted = isBatteryOptimizationIgnored(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     // A2UI Hero Surface interactive state
     var heroCollapsed by remember { mutableStateOf(false) }
@@ -260,6 +277,63 @@ fun DownloadsScreen(
                 }
             }
         )
+
+        // Issue #5: Prompt users to disable battery optimization for reliable background downloads
+        AnimatedVisibility(visible = !batteryUnrestricted && !batteryPromptDismissed) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = Color(0xFFF59E0B).copy(alpha = 0.16f),
+                border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.55f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Bolt,
+                        contentDescription = null,
+                        tint = Color(0xFFF59E0B),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Allow unrestricted background downloads",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Disable battery optimization so downloads don't pause when the screen turns off.",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Button(
+                        onClick = { requestIgnoreBatteryOptimizations(context) },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Disable", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    }
+                    IconButton(
+                        onClick = { batteryPromptDismissed = true },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Dismiss",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
 
         // PDM-style Filter Pills with live counts
         val filterPills = remember(state.downloads.size, activeDownloads.size, completedDownloads.size, queuedOrPausedDownloads.size) {

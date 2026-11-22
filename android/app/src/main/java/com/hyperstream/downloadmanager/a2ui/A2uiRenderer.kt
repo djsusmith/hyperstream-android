@@ -101,22 +101,92 @@ fun A2uiSurfaceRenderer(
                     )
                 }
                 is A2uiComponent.StatusBanner -> {
+                    val bgColor = when (component.tone) {
+                        "warning" -> Color(0xFFF59E0B).copy(alpha = 0.16f)
+                        "active" -> Color(0xFF3F5EFB).copy(alpha = 0.18f)
+                        else -> MaterialTheme.colorScheme.surfaceVariant
+                    }
+                    val borderColor = when (component.tone) {
+                        "warning" -> Color(0xFFF59E0B).copy(alpha = 0.5f)
+                        "active" -> Color(0xFF3F5EFB).copy(alpha = 0.5f)
+                        else -> MaterialTheme.colorScheme.outlineVariant
+                    }
                     Surface(
                         shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.fillMaxWidth()
+                        color = bgColor,
+                        border = BorderStroke(1.dp, borderColor),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp)
+                            .clickable {
+                                onAction(A2uiAction("banner_clicked", surface.surfaceId, mapOf("tone" to component.tone)))
+                            }
                     ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Text(component.title, fontWeight = FontWeight.Bold)
-                            Text(
-                                component.subtitle,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (component.tone == "warning") Icons.Default.HourglassTop else Icons.Default.Bolt,
+                                contentDescription = null,
+                                tint = if (component.tone == "warning") Color(0xFFF59E0B) else MaterialTheme.colorScheme.primary
                             )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(component.title, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text(
+                                    component.subtitle,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
                 is A2uiComponent.MetricGrid -> Unit
+                is A2uiComponent.DownloadNotificationCard -> {
+                    val dm = surface.dataModel
+                    val fileName = dm[component.fileNamePath] as? String ?: "Download"
+                    val category = dm[component.categoryPath] as? String ?: "General"
+                    val status = dm[component.statusPath] as? String ?: "Queued"
+                    val pct = (dm[component.progressPercentPath] as? Number)?.toFloat() ?: 0f
+                    val doneBytes = (dm[component.downloadedBytesPath] as? Number)?.toLong() ?: 0L
+                    val totalBytes = (dm[component.totalBytesPath] as? Number)?.toLong() ?: 0L
+                    val speedBps = (dm[component.speedBpsPath] as? Number)?.toLong() ?: 0L
+                    val etaSec = (dm[component.etaSecondsPath] as? Number)?.toLong() ?: -1L
+                    val actConns = (dm[component.activeThreadsPath] as? Number)?.toInt() ?: 0
+                    val maxConns = (dm[component.maxThreadsPath] as? Number)?.toInt() ?: 32
+                    @Suppress("UNCHECKED_CAST")
+                    val segBuckets = (dm[component.segmentStatesPath] as? List<Int>) ?: emptyList()
+                    val savePath = dm[component.savePathKey] as? String ?: ""
+                    val errorMsg = dm[component.errorMessagePath] as? String ?: ""
+
+                    A2uiDownloadNotificationCardView(
+                        downloadId = component.downloadId,
+                        fileName = fileName,
+                        category = category,
+                        status = status,
+                        progressPct = pct,
+                        downloadedBytes = doneBytes,
+                        totalBytes = totalBytes,
+                        speedBps = speedBps,
+                        etaSeconds = etaSec,
+                        activeThreads = actConns,
+                        maxThreads = maxConns,
+                        segmentBuckets = segBuckets,
+                        savePath = savePath,
+                        errorMessage = errorMsg,
+                        onAction = { actionName ->
+                            onAction(
+                                A2uiAction(
+                                    name = actionName,
+                                    surfaceId = surface.surfaceId,
+                                    payload = mapOf("id" to component.downloadId)
+                                )
+                            )
+                        }
+                    )
+                }
             }
         }
     }
@@ -533,4 +603,315 @@ private fun splitSpeed(bps: Long): Pair<String, String> {
 private fun formatHeroSpeed(bps: Long): String {
     val (n, u) = splitSpeed(bps)
     return "$n $u"
+}
+
+@Composable
+private fun A2uiDownloadNotificationCardView(
+    downloadId: Long,
+    fileName: String,
+    category: String,
+    status: String,
+    progressPct: Float,
+    downloadedBytes: Long,
+    totalBytes: Long,
+    speedBps: Long,
+    etaSeconds: Long,
+    activeThreads: Int,
+    maxThreads: Int,
+    segmentBuckets: List<Int>,
+    savePath: String,
+    errorMessage: String,
+    onAction: (String) -> Unit
+) {
+    val isDownloading = status == "Downloading" || status == "Probing"
+    val isCompleted = status == "Completed"
+    val isFailed = status == "Failed"
+
+    val accentColor = when {
+        isDownloading -> Color(0xFF3F5EFB)
+        isCompleted -> Color(0xFF10B981)
+        isFailed -> Color(0xFFEF4444)
+        else -> Color(0xFFF59E0B)
+    }
+
+    val animatedProgress by animateFloatAsState(
+        targetValue = (progressPct / 100f).coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 300),
+        label = "notif_progress"
+    )
+
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = if (isDownloading) 6.dp else 2.dp,
+        border = BorderStroke(
+            width = if (isDownloading) 1.5.dp else 1.dp,
+            color = if (isDownloading) accentColor.copy(alpha = 0.65f) else MaterialTheme.colorScheme.outlineVariant
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp)
+            .clickable { onAction("inspect") }
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Top Notification Header Row (Android System Shade style + Live Status Pill)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(26.dp)
+                            .clip(CircleShape)
+                            .background(accentColor.copy(alpha = 0.16f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = when {
+                                isCompleted -> Icons.Default.CheckCircle
+                                isDownloading -> Icons.Default.Bolt
+                                else -> Icons.Default.HourglassTop
+                            },
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                    Text(
+                        text = "HYPERSTREAM • ${category.uppercase()}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = accentColor.copy(alpha = 0.15f)
+                ) {
+                    Text(
+                        text = when {
+                            isDownloading -> "LIVE • ${String.format("%.1f%%", progressPct)}"
+                            isCompleted -> "COMPLETED • 100%"
+                            isFailed -> "FAILED"
+                            else -> "${status.uppercase()} • ${String.format("%.1f%%", progressPct)}"
+                        },
+                        color = accentColor,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            // Filename & Telemetry Row
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = fileName,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2
+                )
+                val sizeStr = if (totalBytes > 0L) {
+                    "${formatNotifBytes(downloadedBytes)} / ${formatNotifBytes(totalBytes)}"
+                } else {
+                    formatNotifBytes(downloadedBytes)
+                }
+                val speedAndEta = if (isDownloading) {
+                    val etaTxt = if (etaSeconds in 1..86400) " • ETA ${formatNotifEta(etaSeconds)}" else ""
+                    " • ${formatHeroSpeed(speedBps)}$etaTxt • ${activeThreads}/${maxThreads}T"
+                } else if (isCompleted) {
+                    " • Saved to ${savePath.substringBeforeLast('/').removePrefix("/storage/emulated/0/")}"
+                } else {
+                    " • ${maxThreads}T configured"
+                }
+                Text(
+                    text = "$sizeStr$speedAndEta",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (isFailed && errorMessage.isNotBlank()) {
+                    Text(
+                        text = errorMessage,
+                        fontSize = 12.sp,
+                        color = Color(0xFFEF4444),
+                        maxLines = 2
+                    )
+                }
+            }
+
+            // Smooth Gradient Progress Bar
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(animatedProgress)
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(accentColor, accentColor.copy(alpha = 0.75f))
+                            )
+                        )
+                )
+            }
+
+            // 16-Bucket A2UI Thread Segment Heatmap Strip
+            if (segmentBuckets.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    segmentBuckets.forEach { stateCode ->
+                        val segColor = when (stateCode) {
+                            2 -> Color(0xFF10B981) // Done
+                            1 -> Color(0xFF3F5EFB) // Actively receiving
+                            else -> MaterialTheme.colorScheme.surfaceVariant
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(segColor)
+                        )
+                    }
+                }
+            }
+
+            // Interactive Notification Action Pills
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (!isCompleted) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = accentColor.copy(alpha = 0.15f),
+                        modifier = Modifier.clickable {
+                            onAction(if (isFailed) "retry" else "toggle_pause")
+                        }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isDownloading) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = accentColor,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = when {
+                                    isDownloading -> "Pause"
+                                    isFailed -> "Retry"
+                                    else -> "Resume"
+                                },
+                                color = accentColor,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                } else {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFF10B981).copy(alpha = 0.16f),
+                        modifier = Modifier.clickable { onAction("open_file") }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = Color(0xFF10B981),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Open File",
+                                color = Color(0xFF10B981),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.clickable { onAction("inspect") }
+                ) {
+                    Text(
+                        text = "128T Inspector",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                    )
+                }
+
+                Spacer(Modifier.weight(1f))
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFFEF4444).copy(alpha = 0.12f),
+                    modifier = Modifier.clickable { onAction("cancel") }
+                ) {
+                    Text(
+                        text = if (isCompleted) "Dismiss" else "Cancel",
+                        color = Color(0xFFEF4444),
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun formatNotifBytes(bytes: Long): String {
+    if (bytes <= 0L) return "0 B"
+    val kb = 1024.0
+    val mb = kb * 1024.0
+    val gb = mb * 1024.0
+    return when {
+        bytes >= gb -> String.format("%.2f GB", bytes / gb)
+        bytes >= mb -> String.format("%.1f MB", bytes / mb)
+        bytes >= kb -> String.format("%.0f KB", bytes / kb)
+        else -> "$bytes B"
+    }
+}
+
+private fun formatNotifEta(seconds: Long): String {
+    if (seconds <= 0L) return "0s"
+    val h = seconds / 3600
+    val m = (seconds % 3600) / 60
+    val s = seconds % 60
+    return when {
+        h > 0 -> "${h}h ${m}m"
+        m > 0 -> "${m}m ${s}s"
+        else -> "${s}s"
+    }
 }

@@ -242,6 +242,14 @@ impl Planner {
         Some(s.end.saturating_sub(at))
     }
 
+    /// Marks worker `w`'s current segment as actively receiving once response headers arrive,
+    /// preventing false preemption before the first 256 KB write batch flushes.
+    pub fn mark_receiving(&mut self, w: WorkerId) {
+        if let Some(s) = self.segs.iter_mut().find(|s| s.worker == Some(w)) {
+            s.receiving = true;
+        }
+    }
+
     /// Worker `w` wants to write `len` bytes at `pos` (its next unwritten position).
     pub fn claim(&mut self, w: WorkerId, pos: u64, len: u64) -> Claim {
         let Some(s) = self.segs.iter_mut().find(|s| s.worker == Some(w)) else {

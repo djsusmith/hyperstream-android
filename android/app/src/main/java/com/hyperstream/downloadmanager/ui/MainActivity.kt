@@ -1,10 +1,15 @@
 package com.hyperstream.downloadmanager.ui
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import com.hyperstream.downloadmanager.browser.ClipboardLinkMonitor
 import com.hyperstream.downloadmanager.browser.ExternalDownloadRequest
 import com.hyperstream.downloadmanager.browser.LinkKind
@@ -16,10 +21,32 @@ class MainActivity : ComponentActivity() {
     private lateinit var repository: MdmRepository
     private var clipboardMonitor: ClipboardLinkMonitor? = null
 
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            runCatching {
+                startService(Intent(this, HyperStreamDownloadService::class.java))
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         YouTubeWebViewExtractor.attachHost(this)
         repository = MdmRepository.forContext(this)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                runCatching {
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+        }
 
         runCatching {
             startService(Intent(this, HyperStreamDownloadService::class.java))
@@ -52,6 +79,11 @@ class MainActivity : ComponentActivity() {
 
     private fun handleSharedIntent(intent: Intent?) {
         if (intent == null) return
+
+        if (intent.getBooleanExtra(HyperStreamDownloadService.EXTRA_OPEN_NOTIFICATIONS_TAB, false)) {
+            intent.removeExtra(HyperStreamDownloadService.EXTRA_OPEN_NOTIFICATIONS_TAB)
+            repository.setPendingOpenNotificationsTab(true)
+        }
 
         // 1. Forwarded via EXTRA_SHARED_URL from LinkCatcherActivity
         val forwardedUrl = intent.getStringExtra(EXTRA_SHARED_URL)?.takeIf { it.isNotBlank() }

@@ -1,5 +1,13 @@
 package com.hyperstream.downloadmanager.ui.screens
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.DocumentsContract
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,16 +18,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,9 +39,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.hyperstream.downloadmanager.core.MdmUiState
 import com.hyperstream.downloadmanager.core.SettingsUi
 import com.hyperstream.downloadmanager.ui.theme.MdmThemeStyle
@@ -37,6 +53,51 @@ import com.hyperstream.downloadmanager.updater.UpdateChannel
 import com.hyperstream.downloadmanager.updater.UpdateChannelManager
 import com.hyperstream.downloadmanager.updater.UpdateCheckResult
 import kotlinx.coroutines.launch
+
+internal fun isBatteryOptimizationIgnored(context: Context): Boolean {
+    val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return true
+    return pm.isIgnoringBatteryOptimizations(context.packageName)
+}
+
+internal fun requestIgnoreBatteryOptimizations(context: Context) {
+    val pkgUri = Uri.parse("package:${context.packageName}")
+    val directIntent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkgUri).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    runCatching {
+        context.startActivity(directIntent)
+    }.onFailure {
+        runCatching {
+            val fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(fallback)
+        }
+    }
+}
+
+private fun resolveTreeUriToFilePath(treeUri: Uri): String? {
+    return runCatching {
+        val docId = DocumentsContract.getTreeDocumentId(treeUri) // e.g. "primary:Download/MyFolder"
+        when {
+            docId.startsWith("primary:") -> {
+                val rel = docId.removePrefix("primary:").trim('/')
+                if (rel.isEmpty()) "/storage/emulated/0" else "/storage/emulated/0/$rel"
+            }
+            docId.startsWith("home:") -> {
+                val rel = docId.removePrefix("home:").trim('/')
+                if (rel.isEmpty()) "/storage/emulated/0/Documents" else "/storage/emulated/0/Documents/$rel"
+            }
+            docId.contains(":") -> {
+                val parts = docId.split(":", limit = 2)
+                val vol = parts[0]
+                val rel = parts.getOrElse(1) { "" }.trim('/')
+                if (rel.isEmpty()) "/storage/$vol" else "/storage/$vol/$rel"
+            }
+            else -> null
+        }
+    }.getOrNull()
+}
 
 @Composable
 fun SettingsAndUpdaterScreen(
@@ -49,10 +110,35 @@ fun SettingsAndUpdaterScreen(
 ) {
     val s = state.settings
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     var shizukuStatusMessage by remember { mutableStateOf<String?>(null) }
     var updateResult by remember { mutableStateOf<UpdateCheckResult>(UpdateCheckResult.Idle) }
     var showUpdateDialog by remember { mutableStateOf(false) }
+    var customDirInput by remember(s.defaultDownloadDir) { mutableStateOf(s.defaultDownloadDir) }
+    var batteryUnrestricted by remember { mutableStateOf(isBatteryOptimizationIgnored(context)) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                batteryUnrestricted = isBatteryOptimizationIgnored(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    val folderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val resolved = resolveTreeUriToFilePath(uri)
+            if (!resolved.isNullOrBlank()) {
+                customDirInput = resolved
+                onUpdateSettings { it.copy(defaultDownloadDir = resolved) }
+            }
+        }
+    }
 
     (updateResult as? UpdateCheckResult.UpdateAvailable)?.let { upd ->
         if (showUpdateDialog) {
@@ -84,6 +170,166 @@ fun SettingsAndUpdaterScreen(
                         text = "Min Split Size: ${s.minSplitKb} KB • Global Speed Cap: ${if (s.speedLimitKbps == 0L) "Unlimited" else "${s.speedLimitKbps} KB/s"}",
                         style = MaterialTheme.typography.bodySmall
                     )
+                }
+            }
+        }
+
+        // 1b. Storage & Category Folders (Issue #6)
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Storage & Category Folders",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Choose your default download directory and whether HyperStream automatically creates category subfolders (Video, Programs, Music, etc.).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = customDirInput,
+                        onValueChange = { customDirInput = it },
+                        label = { Text("Default Download Folder") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { folderPickerLauncher.launch(null) }
+                        ) {
+                            Text("Choose Folder")
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                val trimmed = customDirInput.trim().trimEnd('/')
+                                if (trimmed.isNotEmpty()) {
+                                    onUpdateSettings { it.copy(defaultDownloadDir = trimmed) }
+                                }
+                            },
+                            enabled = customDirInput.trim().trimEnd('/') != s.defaultDownloadDir
+                        ) {
+                            Text("Save Path")
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                val def = "/storage/emulated/0/Download/HyperStream"
+                                customDirInput = def
+                                onUpdateSettings { it.copy(defaultDownloadDir = def) }
+                            }
+                        ) {
+                            Text("Reset")
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Use Category By Default",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = if (s.useCategoryFolders) {
+                                    "Enabled: Files sort into ${s.defaultDownloadDir}/<Category>/"
+                                } else {
+                                    "Disabled: All files save directly into ${s.defaultDownloadDir}/"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = s.useCategoryFolders,
+                            onCheckedChange = { enabled ->
+                                onUpdateSettings { it.copy(useCategoryFolders = enabled) }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        // 1c. Background Reliability & Battery Optimization (Issue #5)
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Background Downloads & Battery Optimization",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Prevents Android (Xiaomi, Samsung, Oppo, Vivo) from pausing or killing 128-thread downloads when the screen is off.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Surface(
+                        color = if (batteryUnrestricted) Color(0xFF10B981).copy(alpha = 0.14f) else Color(0xFFF59E0B).copy(alpha = 0.16f),
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (batteryUnrestricted) "✓ Unrestricted (Active)" else "⚠ Battery Optimization Active",
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (batteryUnrestricted) Color(0xFF10B981) else Color(0xFFF59E0B),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    text = if (batteryUnrestricted) {
+                                        "HyperStream is exempted from Doze & background battery restrictions."
+                                    } else {
+                                        "Downloads may pause in the background. Tap Disable to allow unrestricted transfers."
+                                    },
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            if (!batteryUnrestricted) {
+                                Button(
+                                    onClick = { requestIgnoreBatteryOptimizations(context) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B))
+                                ) {
+                                    Text("Disable", color = Color.Black, fontWeight = FontWeight.Bold)
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = {
+                                        runCatching {
+                                            context.startActivity(
+                                                Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                }
+                                            )
+                                        }
+                                    }
+                                ) {
+                                    Text("Manage")
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

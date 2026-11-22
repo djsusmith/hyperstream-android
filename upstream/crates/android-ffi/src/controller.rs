@@ -109,6 +109,8 @@ pub enum ControllerCommand {
         max_connections: Option<u32>,
         min_split_kb: Option<u32>,
         speed_limit_kbps: Option<u64>,
+        default_download_dir: Option<String>,
+        use_category_folders: Option<bool>,
         dns_mode: Option<String>,
         custom_dns_server: Option<String>,
         proxy_url: Option<String>,
@@ -246,9 +248,29 @@ impl AndroidCoreController {
                 let default_conns = st.settings.max_connections;
                 let clamped_conns =
                     clamp_connections_unlocked(connections.unwrap_or(default_conns));
-                let inferred_name = file_name.unwrap_or_else(|| infer_filename(&url));
-                let cat = category.unwrap_or_else(|| infer_category(&inferred_name));
-                let save_dir = self.downloads_dir.join(&cat);
+                let raw_name = file_name
+                    .filter(|s| !s.trim().is_empty())
+                    .unwrap_or_else(|| infer_filename(&url));
+                let inferred_name = crate::extractors::ensure_filename_has_known_extension(
+                    &raw_name,
+                    &url,
+                    None,
+                    None,
+                    None,
+                );
+                let cat = category
+                    .filter(|s| !s.trim().is_empty())
+                    .unwrap_or_else(|| infer_category(&inferred_name));
+                let base_dir = if !st.settings.default_download_dir.trim().is_empty() {
+                    PathBuf::from(st.settings.default_download_dir.trim())
+                } else {
+                    self.downloads_dir.clone()
+                };
+                let save_dir = if st.settings.use_category_folders {
+                    base_dir.join(&cat)
+                } else {
+                    base_dir
+                };
                 let _ = std::fs::create_dir_all(&save_dir);
                 let save_path = save_dir.join(&inferred_name).to_string_lossy().into_owned();
 
@@ -669,6 +691,8 @@ impl AndroidCoreController {
                 max_connections,
                 min_split_kb,
                 speed_limit_kbps,
+                default_download_dir,
+                use_category_folders,
                 dns_mode,
                 custom_dns_server,
                 proxy_url,
@@ -701,6 +725,16 @@ impl AndroidCoreController {
                     } else {
                         self.limiter.set(Some(sl * 1024));
                     }
+                }
+                if let Some(dir) = default_download_dir {
+                    let clean_dir = dir.trim().trim_end_matches('/').to_string();
+                    if !clean_dir.is_empty() {
+                        let _ = std::fs::create_dir_all(&clean_dir);
+                        st.settings.default_download_dir = clean_dir;
+                    }
+                }
+                if let Some(ucf) = use_category_folders {
+                    st.settings.use_category_folders = ucf;
                 }
                 if let Some(dm) = dns_mode {
                     st.settings.dns_mode = dm;
@@ -764,7 +798,17 @@ impl AndroidCoreController {
     }
 
     fn spawn_engine_download(&self, id: u64) {
-        let (url_str, save_path, max_conns, min_split_kb, item_ua, item_referer, item_cookie) = {
+        let (
+            url_str,
+            save_path,
+            max_conns,
+            min_split_kb,
+            item_ua,
+            item_referer,
+            item_cookie,
+            cfg_base_dir,
+            use_cat_folders,
+        ) = {
             let st = self.state.lock().unwrap();
             let Some(item) = st.downloads.iter().find(|d| d.id == id) else {
                 return;
@@ -772,6 +816,11 @@ impl AndroidCoreController {
             if !url_str_is_network(&item.url) {
                 return;
             }
+            let base = if !st.settings.default_download_dir.trim().is_empty() {
+                PathBuf::from(st.settings.default_download_dir.trim())
+            } else {
+                self.downloads_dir.clone()
+            };
             (
                 item.url.clone(),
                 item.save_path.clone(),
@@ -780,6 +829,8 @@ impl AndroidCoreController {
                 item.user_agent.clone(),
                 item.referer.clone(),
                 item.cookie.clone(),
+                base,
+                st.settings.use_category_folders,
             )
         };
 
@@ -794,7 +845,7 @@ impl AndroidCoreController {
         let limiter = self.limiter.clone();
         let hosts = self.hosts.clone();
         let storage_dir = self.storage_dir.clone();
-        let downloads_dir = self.downloads_dir.clone();
+        let downloads_dir = cfg_base_dir;
 
         self.runtime.spawn(async move {
             let mut effective_url = url_str.clone();
@@ -819,7 +870,11 @@ impl AndroidCoreController {
                     Ok(resolved) => {
                         effective_url = resolved.stream_url.clone();
                         custom_ua = Some(resolved.user_agent);
-                        let save_dir = downloads_dir.join(&resolved.category);
+                        let save_dir = if use_cat_folders {
+                            downloads_dir.join(&resolved.category)
+                        } else {
+                            downloads_dir.clone()
+                        };
                         let _ = std::fs::create_dir_all(&save_dir);
                         effective_save_path = save_dir
                             .join(&resolved.file_name)
@@ -854,6 +909,100 @@ impl AndroidCoreController {
                         return;
                     }
                 }
+            } else {
+                let current_fname = Path::new(&effective_save_path)
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("download")
+                    .to_string();
+                if !crate::extractors::has_known_extension(&current_fname)
+                    && !effective_url.contains("googlevideo.com")
+                {
+                    let probe_ua = custom_ua.as_deref().unwrap_or(
+                        "Mozilla/5.0 (Linux; Android 15; SM-S938B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+                    );
+                    if let Ok(probe_client) = mdm_engine::tls::configure(
+                        reqwest::Client::builder().timeout(Duration::from_secs(10)),
+                    )
+                    .build()
+                    {
+                        let mut c_disp: Option<String> = None;
+                        let mut c_type: Option<String> = None;
+                        let mut f_url: Option<String> = None;
+                        if let Ok(resp) = probe_client
+                            .head(&effective_url)
+                            .header(reqwest::header::USER_AGENT, probe_ua)
+                            .send()
+                            .await
+                        {
+                            if resp.status().is_success() {
+                                f_url = Some(resp.url().to_string());
+                                c_disp = resp
+                                    .headers()
+                                    .get(reqwest::header::CONTENT_DISPOSITION)
+                                    .and_then(|v| v.to_str().ok())
+                                    .map(|s| s.to_string());
+                                c_type = resp
+                                    .headers()
+                                    .get(reqwest::header::CONTENT_TYPE)
+                                    .and_then(|v| v.to_str().ok())
+                                    .map(|s| s.to_string());
+                            }
+                        }
+                        if c_disp.is_none()
+                            && c_type
+                                .as_deref()
+                                .and_then(crate::extractors::extension_from_mime)
+                                .is_none()
+                        {
+                            if let Ok(resp) = probe_client
+                                .get(&effective_url)
+                                .header(reqwest::header::USER_AGENT, probe_ua)
+                                .header(reqwest::header::RANGE, "bytes=0-0")
+                                .send()
+                                .await
+                            {
+                                if resp.status().is_success() || resp.status().as_u16() == 206 {
+                                    f_url = Some(resp.url().to_string());
+                                    c_disp = resp
+                                        .headers()
+                                        .get(reqwest::header::CONTENT_DISPOSITION)
+                                        .and_then(|v| v.to_str().ok())
+                                        .map(|s| s.to_string());
+                                    c_type = resp
+                                        .headers()
+                                        .get(reqwest::header::CONTENT_TYPE)
+                                        .and_then(|v| v.to_str().ok())
+                                        .map(|s| s.to_string());
+                                }
+                            }
+                        }
+                        let fixed_name = crate::extractors::ensure_filename_has_known_extension(
+                            &current_fname,
+                            &effective_url,
+                            f_url.as_deref(),
+                            c_disp.as_deref(),
+                            c_type.as_deref(),
+                        );
+                        if fixed_name != current_fname {
+                            let new_cat = infer_category(&fixed_name);
+                            let save_dir = if use_cat_folders {
+                                downloads_dir.join(&new_cat)
+                            } else {
+                                downloads_dir.clone()
+                            };
+                            let _ = std::fs::create_dir_all(&save_dir);
+                            effective_save_path =
+                                save_dir.join(&fixed_name).to_string_lossy().into_owned();
+                            let mut st = state_arc.lock().unwrap();
+                            if let Some(d) = st.downloads.iter_mut().find(|d| d.id == id) {
+                                d.name = fixed_name;
+                                d.category = new_cat;
+                                d.save_path = effective_save_path.clone();
+                            }
+                        }
+                    }
+                }
             }
 
             let effective_url = if effective_url.contains("googlevideo.com") {
@@ -861,6 +1010,8 @@ impl AndroidCoreController {
             } else {
                 effective_url
             };
+            let (effective_url, companion_audio_url) =
+                crate::extractors::split_companion_audio(&effective_url);
             let Ok(parsed_url) = Url::parse(&effective_url) else {
                 return;
             };
@@ -883,21 +1034,28 @@ impl AndroidCoreController {
             }
 
             if is_yt {
-                // YouTube GVS rejects un-ranged plain GETs and >=32-64MB single-range bursts with 403.
-                opts.request_cap = Some(if effective_url.contains("mime=audio") {
+                // visionOS streams support 8 MB ranged requests at full speed across 0..100%;
+                // fallback clients use 2 MB (or 512 KB for audio).
+                opts.request_cap = Some(if effective_url.contains("c=VISIONOS") {
+                    8 * 1024 * 1024
+                } else if effective_url.contains("mime=audio") {
                     512 * 1024
                 } else {
                     2 * 1024 * 1024
                 });
-                opts.max_connections = clamp_connections_unlocked(max_conns).min(8);
+                opts.max_connections = if effective_url.contains("c=VISIONOS") {
+                    clamp_connections_unlocked(max_conns)
+                } else {
+                    clamp_connections_unlocked(max_conns).min(16)
+                };
             } else if is_social_cdn {
                 opts.request_cap = Some(16 * 1024 * 1024);
-                opts.max_connections = clamp_connections_unlocked(max_conns).min(16);
+                opts.max_connections = clamp_connections_unlocked(max_conns);
             } else {
                 opts.max_connections = clamp_connections_unlocked(max_conns);
             }
-            // Prevent tail-end micro-splitting storms at ~90%+ (keep segments >= 256 KB)
-            opts.min_split = u64::from(min_split_kb.max(256)) * 1024;
+            // Prevent tail-end micro-splitting storms at ~90%+ (keep segments >= 1 MB)
+            opts.min_split = u64::from(min_split_kb.max(1024)) * 1024;
             opts.connect_timeout = Duration::from_secs(15);
             opts.read_timeout = Duration::from_secs(20);
             opts.max_retries = 10;
@@ -915,18 +1073,49 @@ impl AndroidCoreController {
                     headers.insert(reqwest::header::COOKIE, val);
                 }
             }
-            if is_yt && (effective_url.contains("c=MWEB") || effective_url.contains("c=WEB")) {
+            if is_yt
+                && (effective_url.contains("c=MWEB")
+                    || effective_url.contains("c=WEB")
+                    || effective_url.contains("c=VISIONOS"))
+            {
+                let yt_origin = if effective_url.contains("c=MWEB") {
+                    "https://m.youtube.com"
+                } else {
+                    "https://www.youtube.com"
+                };
+                let yt_referer = if effective_url.contains("c=MWEB") {
+                    "https://m.youtube.com/"
+                } else {
+                    "https://www.youtube.com/"
+                };
                 if !headers.contains_key(reqwest::header::REFERER) {
                     headers.insert(
                         reqwest::header::REFERER,
-                        reqwest::header::HeaderValue::from_static("https://m.youtube.com/"),
+                        reqwest::header::HeaderValue::from_static(yt_referer),
                     );
                 }
                 if !headers.contains_key(reqwest::header::ORIGIN) {
                     headers.insert(
                         reqwest::header::ORIGIN,
-                        reqwest::header::HeaderValue::from_static("https://m.youtube.com"),
+                        reqwest::header::HeaderValue::from_static(yt_origin),
                     );
+                }
+            }
+            let companion_opts = opts.clone();
+            let companion_headers = headers.clone();
+            let (resolved_save_path, can_resume) =
+                prepare_writable_destination(&effective_save_path, &effective_url, is_yt);
+            if resolved_save_path != effective_save_path {
+                effective_save_path = resolved_save_path;
+                let mut st = state_arc.lock().unwrap();
+                if let Some(d) = st.downloads.iter_mut().find(|d| d.id == id) {
+                    d.save_path = effective_save_path.clone();
+                    if let Some(fname) = Path::new(&effective_save_path)
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                    {
+                        d.name = fname.to_string();
+                    }
                 }
             }
             let req = mdm_engine::Request {
@@ -938,8 +1127,7 @@ impl AndroidCoreController {
             let dl = {
                 let dest_path = std::path::PathBuf::from(&effective_save_path);
                 let st_file = mdm_engine::state::state_path(&dest_path);
-                let part_file = mdm_engine::naming::part_path(&dest_path);
-                if st_file.exists() && part_file.exists() {
+                if can_resume {
                     update_resume_state_url(&effective_save_path, &effective_url);
                     let resume_headers = req.headers.clone();
                     let resume_opts = opts.clone();
@@ -950,6 +1138,7 @@ impl AndroidCoreController {
                 }
             };
             let mut prev_bytes = 0u64;
+            let mut prev_speed = 0u64;
             let mut prev_tick = std::time::Instant::now();
 
             loop {
@@ -959,7 +1148,17 @@ impl AndroidCoreController {
                 }
                 let snap = dl.snapshot();
                 let elapsed = prev_tick.elapsed().as_secs_f64().max(0.05);
-                let speed = ((snap.downloaded.saturating_sub(prev_bytes)) as f64 / elapsed) as u64;
+                let raw_speed =
+                    ((snap.downloaded.saturating_sub(prev_bytes)) as f64 / elapsed) as u64;
+                // Smooth over 150ms ticks so 256 KB batch flushes don't flicker to 0.0 KB/s at 90%+.
+                let speed = if prev_speed > 0 && raw_speed == 0 {
+                    (prev_speed * 4) / 5
+                } else if prev_speed > 0 {
+                    (prev_speed * 2 + raw_speed) / 3
+                } else {
+                    raw_speed
+                };
+                prev_speed = speed;
                 prev_bytes = snap.downloaded;
                 prev_tick = std::time::Instant::now();
 
@@ -999,13 +1198,18 @@ impl AndroidCoreController {
                                 })
                                 .collect();
                         }
-                        d.active_connections = snap
+                        let receiving_count = snap
                             .connections
                             .iter()
                             .filter(|c| {
-                                matches!(c.status, mdm_engine::download::ConnStatus::Receiving)
+                                matches!(
+                                    c.status,
+                                    mdm_engine::download::ConnStatus::Receiving
+                                        | mdm_engine::download::ConnStatus::Connecting
+                                )
                             })
                             .count() as u32;
+                        d.active_connections = receiving_count;
                     }
                 }
 
@@ -1021,6 +1225,22 @@ impl AndroidCoreController {
             }
 
             let res = dl.wait().await;
+            if res.is_ok()
+                && !cancel_token.is_cancelled()
+                && let Some(ref audio_url) = companion_audio_url
+                && let Ok(parsed_audio_url) = Url::parse(audio_url)
+            {
+                let audio_save_path = format!("{effective_save_path}.audio.m4a");
+                let mut aud_opts = companion_opts;
+                aud_opts.max_connections = aud_opts.max_connections.min(4);
+                let aud_req = mdm_engine::Request {
+                    url: parsed_audio_url,
+                    headers: companion_headers,
+                    dest: mdm_engine::Destination::File(PathBuf::from(&audio_save_path)),
+                };
+                let aud_dl = mdm_engine::Download::start(aud_req, aud_opts);
+                let _ = aud_dl.wait().await;
+            }
             let mut st = state_arc.lock().unwrap();
             if let Some(d) = st.downloads.iter_mut().find(|d| d.id == id) {
                 match res {
@@ -1196,12 +1416,73 @@ fn update_resume_state_url(save_path: &str, new_url: &str) {
     if st_path.exists() {
         if let Ok(mut saved) = mdm_engine::state::ResumeState::load(&st_path) {
             if let Ok(parsed) = reqwest::Url::parse(new_url) {
-                if saved.url != parsed {
+                if saved.url != parsed || saved.final_url != parsed {
                     saved.validators.etag = None;
                 }
-                saved.url = parsed;
+                saved.url = parsed.clone();
+                saved.final_url = parsed;
                 let _ = saved.write(&st_path);
             }
         }
     }
+}
+
+/// Ensures `save_path` (and its `.mdm.part` / `.mdm.json` sidecars) is writable under
+/// Android Scoped Storage / FUSE. If stale files from an older APK install exist and
+/// cannot be overwritten or deleted, picks a clean numbered path (`_1`, `_2`, ...).
+fn prepare_writable_destination(save_path: &str, effective_url: &str, is_yt: bool) -> (String, bool) {
+    let dest = PathBuf::from(save_path);
+    let st_file = mdm_engine::state::state_path(&dest);
+    let part_file = mdm_engine::naming::part_path(&dest);
+
+    let is_writable_file = |p: &Path| -> bool {
+        std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(p)
+            .is_ok()
+    };
+
+    if st_file.exists() && part_file.exists() {
+        let part_ok = is_writable_file(&part_file);
+        let st_ok = is_writable_file(&st_file);
+        let saved_state = mdm_engine::state::ResumeState::load(&st_file).ok();
+        let yt_client_mismatch = is_yt
+            && saved_state.as_ref().is_some_and(|s| {
+                effective_url.contains("c=VISIONOS") && !s.final_url.as_str().contains("c=VISIONOS")
+            });
+        if part_ok && st_ok && saved_state.is_some() && !yt_client_mismatch {
+            return (save_path.to_string(), true);
+        }
+        let _ = std::fs::remove_file(&st_file);
+        let _ = std::fs::remove_file(&part_file);
+    } else {
+        if st_file.exists() && !is_writable_file(&st_file) {
+            let _ = std::fs::remove_file(&st_file);
+        }
+        if part_file.exists() && !is_writable_file(&part_file) {
+            let _ = std::fs::remove_file(&part_file);
+        }
+    }
+
+    if !st_file.exists() && !part_file.exists() && (!dest.exists() || is_writable_file(&dest)) {
+        return (save_path.to_string(), false);
+    }
+
+    // FUSE refused deleting stale files owned by a previous install: pick a fresh numbered name.
+    let parent = dest.parent().unwrap_or_else(|| Path::new("/storage/emulated/0/Download/HyperStream"));
+    let stem = dest
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("download");
+    let ext = dest.extension().and_then(|s| s.to_str()).unwrap_or("mp4");
+    for n in 1..100 {
+        let cand = parent.join(format!("{stem}_{n}.{ext}"));
+        let cand_st = mdm_engine::state::state_path(&cand);
+        let cand_part = mdm_engine::naming::part_path(&cand);
+        if !cand.exists() && !cand_st.exists() && !cand_part.exists() {
+            return (cand.to_string_lossy().into_owned(), false);
+        }
+    }
+    (save_path.to_string(), false)
 }

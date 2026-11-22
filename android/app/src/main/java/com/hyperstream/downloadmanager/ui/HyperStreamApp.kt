@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Grain
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -65,6 +66,7 @@ import com.hyperstream.downloadmanager.ui.components.SmartFormatPickerSheet
 import com.hyperstream.downloadmanager.ui.screens.CreditsScreen
 import com.hyperstream.downloadmanager.ui.screens.DownloadsScreen
 import com.hyperstream.downloadmanager.ui.screens.GrabberScreen
+import com.hyperstream.downloadmanager.ui.screens.NotificationsScreen
 import com.hyperstream.downloadmanager.ui.screens.ProgressInspectorSheet
 import com.hyperstream.downloadmanager.ui.screens.QueuesAndSchedulerScreen
 import com.hyperstream.downloadmanager.ui.screens.SettingsAndUpdaterScreen
@@ -166,6 +168,14 @@ fun HyperStreamAppContent(
     val context = LocalContext.current
     var availableUpdate by remember { mutableStateOf<UpdateCheckResult.UpdateAvailable?>(null) }
     var showUpdateDialog by remember { mutableStateOf(false) }
+    val pendingOpenNotif by repository.pendingOpenNotificationsTab.collectAsState()
+
+    LaunchedEffect(pendingOpenNotif) {
+        if (pendingOpenNotif) {
+            selectedTab = 2
+            repository.setPendingOpenNotificationsTab(false)
+        }
+    }
 
     // Automatic update check on app startup (GitHub Releases API)
     LaunchedEffect(Unit) {
@@ -274,6 +284,23 @@ fun HyperStreamAppContent(
                             }
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
+                                color = if (selectedTab == 2) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clickable { selectedTab = 2 }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.Notifications,
+                                        contentDescription = "A2UI Notifications",
+                                        tint = if (selectedTab == 2) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
                                 color = MaterialTheme.colorScheme.surface,
                                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                                 modifier = Modifier
@@ -296,6 +323,7 @@ fun HyperStreamAppContent(
             bottomBar = {
                 // PDM-style Floating Pill Bottom Navigation Bar
                 val activeCount = state.downloads.count { it.status == "Downloading" || it.status == "Probing" }
+                val totalNotifCount = state.downloads.size
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -350,19 +378,45 @@ fun HyperStreamAppContent(
                                 selected = selectedTab == 2,
                                 onClick = { selectedTab = 2 },
                                 colors = itemColors,
-                                icon = { Icon(Icons.Default.Grain, contentDescription = null) },
-                                label = { Text("Torrents", maxLines = 1, fontSize = 10.sp) }
+                                icon = {
+                                    BadgedBox(
+                                        badge = {
+                                            if (activeCount > 0) {
+                                                Badge(containerColor = Color(0xFF3F5EFB)) {
+                                                    Text(activeCount.toString(), color = Color.White)
+                                                }
+                                            } else if (totalNotifCount > 0) {
+                                                Badge(containerColor = MaterialTheme.colorScheme.primaryContainer) {
+                                                    Text(
+                                                        totalNotifCount.toString(),
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    ) {
+                                        Icon(Icons.Default.Notifications, contentDescription = null)
+                                    }
+                                },
+                                label = { Text("Notify", maxLines = 1, fontSize = 10.sp) }
                             )
                             NavigationBarItem(
                                 selected = selectedTab == 3,
                                 onClick = { selectedTab = 3 },
                                 colors = itemColors,
-                                icon = { Icon(Icons.Default.Schedule, contentDescription = null) },
-                                label = { Text("Schedule", maxLines = 1, fontSize = 10.sp) }
+                                icon = { Icon(Icons.Default.Grain, contentDescription = null) },
+                                label = { Text("Torrents", maxLines = 1, fontSize = 10.sp) }
                             )
                             NavigationBarItem(
                                 selected = selectedTab == 4,
                                 onClick = { selectedTab = 4 },
+                                colors = itemColors,
+                                icon = { Icon(Icons.Default.Schedule, contentDescription = null) },
+                                label = { Text("Schedule", maxLines = 1, fontSize = 10.sp) }
+                            )
+                            NavigationBarItem(
+                                selected = selectedTab == 5,
+                                onClick = { selectedTab = 5 },
                                 colors = itemColors,
                                 icon = { Icon(Icons.Default.Settings, contentDescription = null) },
                                 label = { Text("Settings", maxLines = 1, fontSize = 10.sp) }
@@ -407,22 +461,31 @@ fun HyperStreamAppContent(
                             selectedTab = 0
                         }
                     )
-                    2 -> TorrentsAndRssScreen(
+                    2 -> NotificationsScreen(
+                        state = state,
+                        onTogglePauseResume = onTogglePauseResume,
+                        onRetryDownload = onRetryDownload,
+                        onCancelDownload = onCancelDownload,
+                        onInspectDownload = { item ->
+                            inspectedDownloadId = item.id
+                        }
+                    )
+                    3 -> TorrentsAndRssScreen(
                         state = state,
                         onAddMagnet = onAddMagnet
                     )
-                    3 -> QueuesAndSchedulerScreen(
+                    4 -> QueuesAndSchedulerScreen(
                         state = state,
                         onToggleQueue = onToggleQueue
                     )
-                    4 -> SettingsAndUpdaterScreen(
+                    5 -> SettingsAndUpdaterScreen(
                         state = state,
                         onUpdateSettings = onUpdateSettings,
                         onWhitelistDoze = onWhitelistDoze,
                         onSilentSelfUpdate = onSilentSelfUpdate,
-                        onOpenCredits = { selectedTab = 5 }
+                        onOpenCredits = { selectedTab = 6 }
                     )
-                    5 -> CreditsScreen()
+                    6 -> CreditsScreen()
                 }
 
                 // ModalBottomSheet for 128-Thread Segment Inspector (Dismissible, never traps the user across tabs)
@@ -465,6 +528,8 @@ fun HyperStreamAppContent(
                     com.hyperstream.downloadmanager.ui.screens.NewDownloadSheet(
                         defaultConnections = state.settings.maxConnections,
                         defaultCategory = selectedCategory,
+                        defaultDownloadDir = state.settings.defaultDownloadDir,
+                        useCategoryFolders = state.settings.useCategoryFolders,
                         initialRequest = pendingExternalDownload,
                         onDismiss = {
                             showNewDownloadSheet = false
