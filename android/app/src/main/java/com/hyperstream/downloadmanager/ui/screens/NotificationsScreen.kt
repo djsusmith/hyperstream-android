@@ -175,7 +175,7 @@ fun NotificationsScreen(
                         )
                         Column {
                             Text(
-                                text = "A2UI Notification Center",
+                                text = "Notification Center",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.ExtraBold
                             )
@@ -183,31 +183,6 @@ fun NotificationsScreen(
                                 text = "Live download progress cards & system shade sync",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (showA2uiWireInspector) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.clickable { showA2uiWireInspector = !showA2uiWireInspector }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Code,
-                                contentDescription = "A2UI JSON",
-                                tint = if (showA2uiWireInspector) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Text(
-                                text = "A2UI JSON",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (showA2uiWireInspector) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -305,31 +280,6 @@ fun NotificationsScreen(
                         ) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                             Text(" Resume All (${pausedOrFailedDownloads.size})", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
-                    }
-                }
-
-                AnimatedVisibility(visible = showA2uiWireInspector) {
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                text = "A2UI Surface Payload (${notificationsSurface.surfaceId})",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = notificationsSurface.toWireJson().take(900) + "\n...",
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
                     }
                 }

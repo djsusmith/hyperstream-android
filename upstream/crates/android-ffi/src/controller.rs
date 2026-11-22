@@ -266,12 +266,21 @@ impl AndroidCoreController {
                 } else {
                     self.downloads_dir.clone()
                 };
-                let save_dir = if st.settings.use_category_folders {
+                let mut save_dir = if st.settings.use_category_folders {
                     base_dir.join(&cat)
                 } else {
                     base_dir
                 };
-                let _ = std::fs::create_dir_all(&save_dir);
+                if let Err(e) = std::fs::create_dir_all(&save_dir) {
+                    eprintln!("Failed to create save_dir {:?}: {:?}. Falling back to default downloads_dir.", save_dir, e);
+                    let fallback_dir = if st.settings.use_category_folders {
+                        self.downloads_dir.join(&cat)
+                    } else {
+                        self.downloads_dir.clone()
+                    };
+                    let _ = std::fs::create_dir_all(&fallback_dir);
+                    save_dir = fallback_dir;
+                }
                 let save_path = save_dir.join(&inferred_name).to_string_lossy().into_owned();
 
                 if let Some(existing) = st.downloads.iter_mut().find(|d| {
@@ -870,12 +879,17 @@ impl AndroidCoreController {
                     Ok(resolved) => {
                         effective_url = resolved.stream_url.clone();
                         custom_ua = Some(resolved.user_agent);
-                        let save_dir = if use_cat_folders {
+                        let mut save_dir = if use_cat_folders {
                             downloads_dir.join(&resolved.category)
                         } else {
                             downloads_dir.clone()
                         };
-                        let _ = std::fs::create_dir_all(&save_dir);
+                        if let Err(e) = std::fs::create_dir_all(&save_dir) {
+                            eprintln!("Failed to create save_dir {:?}: {:?}. Falling back to Download/HyperStream.", save_dir, e);
+                            let fallback = PathBuf::from("/storage/emulated/0/Download/HyperStream");
+                            let _ = std::fs::create_dir_all(&fallback);
+                            save_dir = fallback;
+                        }
                         effective_save_path = save_dir
                             .join(&resolved.file_name)
                             .to_string_lossy()
@@ -986,12 +1000,17 @@ impl AndroidCoreController {
                         );
                         if fixed_name != current_fname {
                             let new_cat = infer_category(&fixed_name);
-                            let save_dir = if use_cat_folders {
+                            let mut save_dir = if use_cat_folders {
                                 downloads_dir.join(&new_cat)
                             } else {
                                 downloads_dir.clone()
                             };
-                            let _ = std::fs::create_dir_all(&save_dir);
+                            if let Err(e) = std::fs::create_dir_all(&save_dir) {
+                                eprintln!("Failed to create save_dir {:?}: {:?}. Falling back to Download/HyperStream.", save_dir, e);
+                                let fallback = PathBuf::from("/storage/emulated/0/Download/HyperStream");
+                                let _ = std::fs::create_dir_all(&fallback);
+                                save_dir = fallback;
+                            }
                             effective_save_path =
                                 save_dir.join(&fixed_name).to_string_lossy().into_owned();
                             let mut st = state_arc.lock().unwrap();
@@ -1255,7 +1274,16 @@ impl AndroidCoreController {
                     Err(err) => {
                         if d.status != "Paused" && d.status != "Queued" {
                             d.status = "Failed".to_string();
-                            d.error_message = Some(err.to_string());
+                            let msg = err.to_string();
+                            let friendly_msg = if msg.contains("os error 1")
+                                || msg.contains("Operation not permitted")
+                                || msg.contains("Permission denied")
+                            {
+                                format!("Storage permission needed: grant 'All files access' in Settings to write to {}", d.save_path)
+                            } else {
+                                msg
+                            };
+                            d.error_message = Some(friendly_msg);
                         }
                         d.speed_bps = 0;
                         d.active_connections = 0;
@@ -1432,6 +1460,36 @@ fn update_resume_state_url(save_path: &str, new_url: &str) {
 /// cannot be overwritten or deleted, picks a clean numbered path (`_1`, `_2`, ...).
 fn prepare_writable_destination(save_path: &str, effective_url: &str, is_yt: bool) -> (String, bool) {
     let dest = PathBuf::from(save_path);
+    let parent = dest.parent().unwrap_or_else(|| Path::new("/storage/emulated/0/Download/HyperStream"));
+
+    if !parent.exists() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+
+    // Verify parent directory writability under Android FUSE / Scoped Storage
+    let is_parent_writable = {
+        let probe = parent.join(format!(".hs_probe_{}", std::process::id()));
+        match std::fs::OpenOptions::new().write(true).create(true).open(&probe) {
+            Ok(_) => {
+                let _ = std::fs::remove_file(probe);
+                true
+            }
+            Err(_) => false,
+        }
+    };
+
+    if !is_parent_writable {
+        eprintln!(
+            "Destination parent {:?} is not writable. Falling back to public Download/HyperStream.",
+            parent
+        );
+        let fallback_parent = Path::new("/storage/emulated/0/Download/HyperStream");
+        let _ = std::fs::create_dir_all(fallback_parent);
+        let fname = dest.file_name().unwrap_or_else(|| std::ffi::OsStr::new("download"));
+        let fallback_dest = fallback_parent.join(fname);
+        return (fallback_dest.to_string_lossy().into_owned(), false);
+    }
+
     let st_file = mdm_engine::state::state_path(&dest);
     let part_file = mdm_engine::naming::part_path(&dest);
 

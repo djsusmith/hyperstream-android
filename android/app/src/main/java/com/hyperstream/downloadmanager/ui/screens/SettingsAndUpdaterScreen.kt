@@ -1,21 +1,28 @@
 package com.hyperstream.downloadmanager.ui.screens
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
 import android.os.PowerManager
 import android.provider.DocumentsContract
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -44,6 +51,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.hyperstream.downloadmanager.core.MdmUiState
@@ -57,6 +65,36 @@ import kotlinx.coroutines.launch
 internal fun isBatteryOptimizationIgnored(context: Context): Boolean {
     val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return true
     return pm.isIgnoringBatteryOptimizations(context.packageName)
+}
+
+internal fun isAllFilesAccessGranted(context: Context): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        Environment.isExternalStorageManager()
+    } else {
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+}
+
+internal fun requestAllFilesAccess(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        runCatching {
+            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                data = Uri.parse("package:${context.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        }.recoverCatching {
+            val fallback = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(fallback)
+        }
+    } else {
+        Toast.makeText(context, "Storage permission is already handled by system", Toast.LENGTH_SHORT).show()
+    }
 }
 
 internal fun requestIgnoreBatteryOptimizations(context: Context) {
@@ -117,11 +155,13 @@ fun SettingsAndUpdaterScreen(
     var showUpdateDialog by remember { mutableStateOf(false) }
     var customDirInput by remember(s.defaultDownloadDir) { mutableStateOf(s.defaultDownloadDir) }
     var batteryUnrestricted by remember { mutableStateOf(isBatteryOptimizationIgnored(context)) }
+    var allFilesAccessGranted by remember { mutableStateOf(isAllFilesAccessGranted(context)) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 batteryUnrestricted = isBatteryOptimizationIgnored(context)
+                allFilesAccessGranted = isAllFilesAccessGranted(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -132,10 +172,22 @@ fun SettingsAndUpdaterScreen(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         if (uri != null) {
+            runCatching {
+                val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(uri, flags)
+            }
             val resolved = resolveTreeUriToFilePath(uri)
             if (!resolved.isNullOrBlank()) {
                 customDirInput = resolved
                 onUpdateSettings { it.copy(defaultDownloadDir = resolved) }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
+                    Toast.makeText(
+                        context,
+                        "Please grant 'All files access' so HyperStream can save downloads to $resolved",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    requestAllFilesAccess(context)
+                }
             }
         }
     }
@@ -210,6 +262,14 @@ fun SettingsAndUpdaterScreen(
                                 val trimmed = customDirInput.trim().trimEnd('/')
                                 if (trimmed.isNotEmpty()) {
                                     onUpdateSettings { it.copy(defaultDownloadDir = trimmed) }
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
+                                        Toast.makeText(
+                                            context,
+                                            "Please grant 'All files access' so HyperStream can save downloads to $trimmed",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                        requestAllFilesAccess(context)
+                                    }
                                 }
                             },
                             enabled = customDirInput.trim().trimEnd('/') != s.defaultDownloadDir
@@ -253,6 +313,44 @@ fun SettingsAndUpdaterScreen(
                                 onUpdateSettings { it.copy(useCategoryFolders = enabled) }
                             }
                         )
+                    }
+                    Surface(
+                        color = if (allFilesAccessGranted) Color(0xFF10B981).copy(alpha = 0.14f) else Color(0xFFF59E0B).copy(alpha = 0.16f),
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (allFilesAccessGranted) "✓ All Files Access (Granted)" else "⚠ All Files Access Needed for Custom Folders",
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (allFilesAccessGranted) Color(0xFF10B981) else Color(0xFFF59E0B),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    text = if (allFilesAccessGranted) {
+                                        "HyperStream has full write access to save in any internal storage or SD card folder."
+                                    } else {
+                                        "Android requires 'All files access' permission to save files into custom folders (like ${s.defaultDownloadDir})."
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            if (!allFilesAccessGranted) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Button(
+                                    onClick = { requestAllFilesAccess(context) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B))
+                                ) {
+                                    Text("Grant Access", color = Color.Black)
+                                }
+                            }
+                        }
                     }
                 }
             }

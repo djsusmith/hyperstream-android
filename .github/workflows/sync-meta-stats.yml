@@ -82,5 +82,6 @@ jobs:
           git add docs/stats.json
           git diff --cached --quiet && exit 0
           git commit -m "chore(stats): sync Meta Pixel download totals"
+          git pull --rebase origin main
           git push origin HEAD:main
-          git push origin HEAD:feat/hyperstream-android
+          git push --force-with-lease origin HEAD:feat/hyperstream-android || true

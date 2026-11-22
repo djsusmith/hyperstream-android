@@ -52,7 +52,7 @@ SYNCED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 mkdir -p "$ROOT_DIR/upstream/crates" "$ROOT_DIR/upstream/i18n"
 
-for crate in engine torrent debrid extract geo cnl ipc remote tools labserver cli; do
+for crate in torrent debrid extract geo cnl ipc remote tools labserver cli; do
   if [[ -d "$SRC_DIR/crates/$crate" ]]; then
     rm -rf "$ROOT_DIR/upstream/crates/$crate"
     cp -a "$SRC_DIR/crates/$crate" "$ROOT_DIR/upstream/crates/$crate"
@@ -67,6 +67,15 @@ fi
 cp -a "$SRC_DIR/i18n/." "$ROOT_DIR/upstream/i18n/"
 if [[ ! -f "$ROOT_DIR/upstream/Cargo.toml" ]] || ! grep -q "crates/android-ffi" "$ROOT_DIR/upstream/Cargo.toml"; then
   cp -a "$SRC_DIR/Cargo.toml" "$ROOT_DIR/upstream/Cargo.toml"
+fi
+if ! grep -q '^tokio-socks[[:space:]]*=' "$ROOT_DIR/upstream/Cargo.toml"; then
+  python3 -c '
+p = "'"$ROOT_DIR"'/upstream/Cargo.toml"
+s = open(p).read()
+if "tokio-socks" not in s:
+    s = s.replace("[workspace.dependencies]\n", "[workspace.dependencies]\ntokio-socks = \"0.5.2\"\n", 1)
+    open(p, "w").write(s)
+'
 fi
 if [[ -f "$ROOT_DIR/upstream/crates/engine/Cargo.toml" ]] && ! grep -q 'target_os = "android"' "$ROOT_DIR/upstream/crates/engine/Cargo.toml"; then
   cat >> "$ROOT_DIR/upstream/crates/engine/Cargo.toml" <<'EOF'

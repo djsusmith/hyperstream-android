@@ -12,6 +12,7 @@ authors = ["Ahmed Nefzaoui"]
 publish = false
 
 [workspace.dependencies]
+tokio-socks = "0.5.2"
 mdm-cli = { path = "crates/cli" }
 mdm-cnl = { path = "crates/cnl" }
 mdm-debrid = { path = "crates/debrid" }
